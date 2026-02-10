@@ -3,7 +3,7 @@ import { createHealthRouter, createConfigRouter } from "./routes/index.js";
 import { errorHandler } from "./middleware/error-handler.js";
 
 type StartupOptions = {
-  configPath: string;
+  configPath?: string;
   port: number;
 };
 
@@ -11,7 +11,7 @@ const HOST = "127.0.0.1";
 const DEFAULT_PORT = 3000;
 
 function usage(): string {
-  return "Usage: node dist/server.js --config <path> [--port <number>]";
+  return "Usage: node dist/server.js [--config <path>] [--port <number>]";
 }
 
 function parsePort(rawPort: string): number {
@@ -59,10 +59,6 @@ function parseStartupOptions(argv: string[]): StartupOptions {
     throw new Error(`Unknown argument: ${arg}`);
   }
 
-  if (!configPath) {
-    throw new Error("Missing required argument: --config <path>.");
-  }
-
   return { configPath, port };
 }
 
@@ -82,12 +78,14 @@ app.use(express.static("public"));
 app.use(express.json());
 
 app.use("/api", createHealthRouter());
-app.use("/api", createConfigRouter(startupOptions.configPath));
+app.use("/api", createConfigRouter(startupOptions.configPath || ""));
 
 app.use(errorHandler);
 
 app.listen(startupOptions.port, HOST, () => {
-  console.log(`Config file: ${startupOptions.configPath}`);
+  if (startupOptions.configPath) {
+    console.log(`Config file: ${startupOptions.configPath}`);
+  }
   console.log(
     `pzserver-config-panel listening on http://${HOST}:${startupOptions.port}`,
   );

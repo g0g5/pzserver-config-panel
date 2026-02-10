@@ -43,11 +43,11 @@ async function savePathsConfig() {
 // 初始化时加载路径配置
 loadPathsConfig().catch(console.error);
 
-export function createConfigRouter(configPath: string): express.Router {
+export function createConfigRouter(configPath?: string): express.Router {
   const router = express.Router();
 
-  // 如果iniFilePath尚未设置，则使用命令行参数传递的configPath
-  if (!pathsConfig.iniFilePath) {
+  // 如果iniFilePath尚未设置，且提供了configPath，则使用命令行参数传递的configPath
+  if (!pathsConfig.iniFilePath && configPath) {
     pathsConfig.iniFilePath = configPath;
     // 保存到文件
     savePathsConfig().catch(console.error);
@@ -55,7 +55,13 @@ export function createConfigRouter(configPath: string): express.Router {
 
   router.get("/config", async (_req, res) => {
     try {
-      const data = await readConfig(configPath);
+      // 使用pathsConfig.iniFilePath或configPath
+      const actualConfigPath = pathsConfig.iniFilePath || configPath;
+      if (!actualConfigPath) {
+        throw new AppError("BAD_REQUEST", "No config path provided and no saved path found");
+      }
+      
+      const data = await readConfig(actualConfigPath);
       
       let workshopItems: WorkshopItem[] = [];
       const workshopItemsItem = data.items.find((item) => item.key === "WorkshopItems");
@@ -87,7 +93,13 @@ export function createConfigRouter(configPath: string): express.Router {
 
   router.put("/config", async (req, res) => {
     try {
-      const data = await saveConfig(configPath, req.body);
+      // 使用pathsConfig.iniFilePath或configPath
+      const actualConfigPath = pathsConfig.iniFilePath || configPath;
+      if (!actualConfigPath) {
+        throw new AppError("BAD_REQUEST", "No config path provided and no saved path found");
+      }
+      
+      const data = await saveConfig(actualConfigPath, req.body);
       res.json(data);
     } catch (error) {
       if (error instanceof AppError) {
