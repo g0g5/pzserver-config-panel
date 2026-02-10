@@ -5,6 +5,7 @@ let workshopItemsItems = [];
 let workshopItemsData = [];
 let mapItems = [];
 let groupedNormalItems = {};
+let currentAddType = null;
 
 const ITEM_GROUPS = {
   basic: {
@@ -228,6 +229,12 @@ function renderWorkshopItems() {
     const headerDiv = document.createElement("div");
     headerDiv.className = "workshop-item-header";
 
+    // 添加序号
+    const indexSpan = document.createElement("span");
+    indexSpan.className = "list-item-index";
+    indexSpan.textContent = (index + 1);
+    headerDiv.appendChild(indexSpan);
+
     const statusIndicator = document.createElement("span");
     statusIndicator.className = "workshop-status " + (workshopItem.isDownloaded ? "downloaded" : "not-downloaded");
     statusIndicator.textContent = workshopItem.isDownloaded ? "✓" : "✗";
@@ -386,6 +393,12 @@ function renderListEditor(containerId, items, type) {
     const div = document.createElement("div");
     div.className = "list-item";
 
+    // 添加序号
+    const indexSpan = document.createElement("span");
+    indexSpan.className = "list-item-index";
+    indexSpan.textContent = (index + 1);
+    div.appendChild(indexSpan);
+
     const input = document.createElement("input");
     input.type = "text";
     input.className = "list-item-input";
@@ -421,16 +434,67 @@ function renderListEditor(containerId, items, type) {
 }
 
 function addListItem(type) {
+  currentAddType = type;
+  
+  // 设置对话框标题和标签
+  const dialogTitle = document.getElementById("dialogTitle");
+  const dialogLabel = document.getElementById("dialogLabel");
+  const dialogInput = document.getElementById("dialogInput");
+  
   if (type === "Mods") {
-    modsItems.push("");
-    renderMods();
+    dialogTitle.textContent = "添加模组 (Mods)";
+    dialogLabel.textContent = "模组ID";
+    dialogInput.placeholder = "请输入模组ID";
   } else if (type === "WorkshopItems") {
-    workshopItemsItems.push("");
-    renderWorkshopItems();
+    dialogTitle.textContent = "添加创意工坊项目 (WorkshopItems)";
+    dialogLabel.textContent = "创意工坊ID";
+    dialogInput.placeholder = "请输入创意工坊ID";
   } else if (type === "Map") {
-    mapItems.push("");
+    dialogTitle.textContent = "添加地图 (Map)";
+    dialogLabel.textContent = "地图名称";
+    dialogInput.placeholder = "请输入地图名称";
+  }
+  
+  // 清空输入框
+  dialogInput.value = "";
+  
+  // 显示对话框
+  const dialog = document.getElementById("addItemDialog");
+  dialog.classList.add("active");
+  
+  // 聚焦输入框
+  setTimeout(() => {
+    dialogInput.focus();
+  }, 100);
+}
+
+
+
+function hideDialog() {
+  const dialog = document.getElementById("addItemDialog");
+  dialog.classList.remove("active");
+  currentAddType = null;
+}
+
+function confirmAddItem() {
+  const inputValue = document.getElementById("dialogInput").value.trim();
+  
+  if (!inputValue) {
+    return;
+  }
+  
+  if (currentAddType === "Mods") {
+    modsItems.push(inputValue);
+    renderMods();
+  } else if (currentAddType === "WorkshopItems") {
+    workshopItemsItems.push(inputValue);
+    renderWorkshopItems();
+  } else if (currentAddType === "Map") {
+    mapItems.push(inputValue);
     renderMap();
   }
+  
+  hideDialog();
 }
 
 function deleteListItem(type, index) {
@@ -569,6 +633,32 @@ document.addEventListener("DOMContentLoaded", async () => {
     button.addEventListener("click", () => {
       switchTab(button.dataset.tab);
     });
+  });
+
+  // 对话框事件监听器
+  document.getElementById("closeDialog").addEventListener("click", hideDialog);
+  document.getElementById("cancelDialog").addEventListener("click", hideDialog);
+  document.getElementById("confirmDialog").addEventListener("click", confirmAddItem);
+  
+  // 点击对话框外部关闭
+  document.getElementById("addItemDialog").addEventListener("click", (e) => {
+    if (e.target === e.currentTarget) {
+      hideDialog();
+    }
+  });
+  
+  // 按ESC键关闭对话框
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      hideDialog();
+    }
+  });
+  
+  // 按Enter键确认
+  document.getElementById("dialogInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      confirmAddItem();
+    }
   });
 });
 
