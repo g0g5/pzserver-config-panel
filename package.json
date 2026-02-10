@@ -1,0 +1,27 @@
+{
+  "name": "pzserver-config-panel",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Project Zomboid server config panel (V1)",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "test": "vitest"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.2.1",
+    "@vitest/ui": "^4.0.18",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "vitest": "^4.0.18"
+  }
+}

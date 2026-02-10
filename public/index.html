@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PZ Server Config Panel</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div class="header-left">
+      <span id="configPath" class="config-path"></span>
+      <span id="connectionStatus" class="status-indicator"></span>
+    </div>
+    <button id="saveButton" class="save-button">保存</button>
+  </header>
+
+  <main>
+    <section id="normalItems" class="config-section">
+      <h2>普通配置项</h2>
+      <div id="normalItemsList" class="items-list"></div>
+    </section>
+
+    <section id="modsSection" class="config-section">
+      <h2>Mods (模组)</h2>
+      <div class="list-controls">
+        <button class="add-button" data-type="Mods">添加</button>
+      </div>
+      <div id="modsList" class="list-editor"></div>
+    </section>
+
+    <section id="workshopItemsSection" class="config-section">
+      <h2>WorkshopItems (创意工坊)</h2>
+      <div class="list-controls">
+        <button class="add-button" data-type="WorkshopItems">添加</button>
+      </div>
+      <div id="workshopItemsList" class="list-editor"></div>
+    </section>
+  </main>
+
+  <footer id="statusMessage" class="status-message"></footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
