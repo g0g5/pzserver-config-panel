@@ -1,9 +1,54 @@
 import express from "express";
 import { readConfig, saveConfig } from "../config/service.js";
 import { AppError, toErrorResponse } from "../errors/app-error.js";
+import { readFile, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+
+type PathsConfig = {
+  workshopPath: string;
+  iniFilePath: string;
+};
+
+const PATHS_CONFIG_FILE = "./paths-config.json";
+
+let pathsConfig: PathsConfig = {
+  workshopPath: "",
+  iniFilePath: ""
+};
+
+// 加载路径配置
+async function loadPathsConfig() {
+  try {
+    if (existsSync(PATHS_CONFIG_FILE)) {
+      const content = await readFile(PATHS_CONFIG_FILE, "utf8");
+      pathsConfig = JSON.parse(content);
+    }
+  } catch (error) {
+    console.error("Failed to load paths config:", error);
+  }
+}
+
+// 保存路径配置
+async function savePathsConfig() {
+  try {
+    await writeFile(PATHS_CONFIG_FILE, JSON.stringify(pathsConfig, null, 2));
+  } catch (error) {
+    console.error("Failed to save paths config:", error);
+  }
+}
+
+// 初始化时加载路径配置
+loadPathsConfig().catch(console.error);
 
 export function createConfigRouter(configPath: string): express.Router {
   const router = express.Router();
+
+  // 如果iniFilePath尚未设置，则使用命令行参数传递的configPath
+  if (!pathsConfig.iniFilePath) {
+    pathsConfig.iniFilePath = configPath;
+    // 保存到文件
+    savePathsConfig().catch(console.error);
+  }
 
   router.get("/config", async (_req, res) => {
     try {
@@ -23,6 +68,46 @@ export function createConfigRouter(configPath: string): express.Router {
     try {
       const data = await saveConfig(configPath, req.body);
       res.json(data);
+    } catch (error) {
+      if (error instanceof AppError) {
+        res.status(error.status).json(toErrorResponse(error));
+      } else {
+        const message = error instanceof Error ? error.message : String(error);
+        res.status(500).json({ error: { code: "INTERNAL_ERROR", message } });
+      }
+    }
+  });
+
+  router.get("/paths", async (_req, res) => {
+    try {
+      res.json(pathsConfig);
+    } catch (error) {
+      if (error instanceof AppError) {
+        res.status(error.status).json(toErrorResponse(error));
+      } else {
+        const message = error instanceof Error ? error.message : String(error);
+        res.status(500).json({ error: { code: "INTERNAL_ERROR", message } });
+      }
+    }
+  });
+
+  router.put("/paths", async (req, res) => {
+    try {
+      const { workshopPath, iniFilePath } = req.body;
+      
+      if (typeof workshopPath !== "string" || typeof iniFilePath !== "string") {
+        throw new AppError("BAD_REQUEST", "Invalid paths configuration");
+      }
+      
+      pathsConfig = {
+        workshopPath,
+        iniFilePath
+      };
+      
+      // 持久化保存路径配置
+      await savePathsConfig();
+      
+      res.json({ ok: true, paths: pathsConfig });
     } catch (error) {
       if (error instanceof AppError) {
         res.status(error.status).json(toErrorResponse(error));

@@ -94,6 +94,105 @@ main {
   width: 100%;
 }
 
+.tab-navigation {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+  border-bottom: 1px solid #404040;
+  padding-bottom: 0.5rem;
+}
+
+.tab-button {
+  background-color: #2a2a2a;
+  border: 1px solid #404040;
+  color: #a0a0a0;
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px 6px 0 0;
+  font-size: 0.9375rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-bottom: none;
+  margin-bottom: -1px;
+}
+
+.tab-button:hover {
+  background-color: #333;
+  color: #e0e0e0;
+}
+
+.tab-button.active {
+  background-color: #303030;
+  color: #ffffff;
+  border-color: #4caf50;
+}
+
+.tab-content {
+  display: none;
+  animation: fadeIn 0.3s ease;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.paths-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.path-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.path-label {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.path-description {
+  font-size: 0.8125rem;
+  color: #a0a0a0;
+}
+
+.path-input {
+  width: 100%;
+  background-color: #1a1a1a;
+  border: 1px solid #404040;
+  border-radius: 4px;
+  padding: 0.625rem 0.875rem;
+  color: #e0e0e0;
+  font-size: 0.9375rem;
+  font-family: monospace;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.path-input:focus {
+  outline: none;
+  border-color: #4caf50;
+  box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+}
+
+.path-actions {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: flex-start;
+}
+
 .main-content {
   display: flex;
   gap: 2rem;
@@ -116,6 +215,50 @@ main {
   border-radius: 8px;
   padding: 1.5rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.config-group {
+  margin-bottom: 1.5rem;
+  background-color: #2a2a2a;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.config-group:last-child {
+  margin-bottom: 0;
+}
+
+.group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #303030;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  border-bottom: 1px solid #404040;
+}
+
+.group-header:hover {
+  background-color: #353535;
+}
+
+.group-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0;
+}
+
+.group-content {
+  padding: 1rem;
+  display: block;
+  transition: all 0.3s ease;
+}
+
+.group-content.collapsed {
+  display: none;
 }
 
 .right-column .config-section:last-child {

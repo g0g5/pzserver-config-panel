@@ -3,6 +3,38 @@ let normalItems = [];
 let modsItems = [];
 let workshopItemsItems = [];
 let mapItems = [];
+let groupedNormalItems = {};
+
+const ITEM_GROUPS = {
+  basic: {
+    name: "服务器基本设置",
+    keys: ["Public", "PublicName", "PublicDescription", "MaxPlayers", "DefaultPort", "UDPPort", "RCONPort", "RCONPassword", "Password", "ServerWelcomeMessage", "ServerImageLoginScreen", "ServerImageLoadingScreen", "ServerImageIcon", "UPnP"]
+  },
+  pvp: {
+    name: "PVP设置",
+    keys: ["PVP", "PVPLogToolChat", "PVPLogToolFile", "SafetySystem", "ShowSafety", "SafetyToggleTimer", "SafetyCooldownTimer", "SafetyDisconnectDelay", "WarStartDelay", "WarDuration", "WarSafehouseHitPoints", "PVPMeleeWhileHitReaction", "PVPMeleeDamageModifier", "PVPFirearmDamageModifier"]
+  },
+  safehouse: {
+    name: "安全屋设置",
+    keys: ["PlayerSafehouse", "AdminSafehouse", "SafehouseAllowTrepass", "SafehouseAllowFire", "SafehouseAllowLoot", "SafehouseAllowRespawn", "SafehouseDaySurvivedToClaim", "SafeHouseRemovalTime", "SafehouseAllowNonResidential", "SafehouseDisableDisguises", "MaxSafezoneSize", "DisableSafehouseWhenPlayerConnected"]
+  },
+  chat: {
+    name: "聊天设置",
+    keys: ["GlobalChat", "ChatStreams", "DiscordEnable", "DiscordToken", "DiscordChannel", "DiscordChannelID", "WebhookAddress", "ChatMessageCharacterLimit", "ChatMessageSlowModeTime", "BadWordListFile", "GoodWordListFile", "BadWordPolicy", "BadWordReplacement"]
+  },
+  player: {
+    name: "玩家设置",
+    keys: ["Open", "AutoCreateUserInWhiteList", "DisplayUserName", "ShowFirstAndLastName", "UsernameDisguises", "HideDisguisedUserName", "SpawnPoint", "SpawnItems", "DropOffWhiteListAfterDeath", "AllowCoop", "SleepAllowed", "SleepNeeded", "KnockedDownAllowed", "SneakModeHideFromOtherPlayers", "PlayerRespawnWithSelf", "PlayerRespawnWithOther", "FastForwardMultiplier", "AllowNonAsciiUsername", "MouseOverToSeeDisplayName", "HidePlayersBehindYou", "MapRemotePlayerVisibility", "Faction", "FactionDaySurvivedToCreate", "FactionPlayersRequiredForTag"]
+  },
+  anticheat: {
+    name: "反作弊设置",
+    keys: ["AntiCheatSafety", "AntiCheatMovement", "AntiCheatHit", "AntiCheatPacket", "AntiCheatPermission", "AntiCheatXP", "AntiCheatFire", "AntiCheatSafeHouse", "AntiCheatRecipe", "AntiCheatPlayer", "AntiCheatChecksum", "AntiCheatItem", "AntiCheatServerCustomization", "DoLuaChecksum", "SteamVAC"]
+  },
+  performance: {
+    name: "性能设置",
+    keys: ["PauseEmpty", "SaveWorldEveryMinutes", "DenyLoginOnOverloadedServer", "LoginQueueEnabled", "LoginQueueConnectTimeout", "ItemNumbersLimitPerContainer", "BloodSplatLifespanDays", "BackupsCount", "BackupsOnStart", "BackupsOnVersionChange", "BackupsPeriod", "MultiplayerStatisticsPeriod", "RemovePlayerCorpsesOnCorpseRemoval"]
+  }
+};
 
 function setStatus(message, type = "") {
   const footer = document.getElementById("statusMessage");
@@ -41,6 +73,7 @@ function renderConfig() {
   modsItems = [];
   workshopItemsItems = [];
   mapItems = [];
+  groupedNormalItems = {};
 
   configData.items.forEach((item) => {
     if (item.key === "Mods") {
@@ -54,6 +87,26 @@ function renderConfig() {
     }
   });
 
+  // 分组普通配置项
+  Object.keys(ITEM_GROUPS).forEach(groupKey => {
+    groupedNormalItems[groupKey] = [];
+  });
+  groupedNormalItems.other = [];
+
+  normalItems.forEach(item => {
+    let assigned = false;
+    for (const groupKey in ITEM_GROUPS) {
+      if (ITEM_GROUPS[groupKey].keys.includes(item.key)) {
+        groupedNormalItems[groupKey].push(item);
+        assigned = true;
+        break;
+      }
+    }
+    if (!assigned) {
+      groupedNormalItems.other.push(item);
+    }
+  });
+
   renderNormalItems();
   renderMods();
   renderWorkshopItems();
@@ -64,7 +117,47 @@ function renderNormalItems() {
   const container = document.getElementById("normalItemsList");
   container.innerHTML = "";
 
-  normalItems.forEach((item) => {
+  // 渲染已定义分组
+  Object.keys(ITEM_GROUPS).forEach(groupKey => {
+    const groupItems = groupedNormalItems[groupKey];
+    if (groupItems.length > 0) {
+      renderItemGroup(container, groupKey, ITEM_GROUPS[groupKey].name, groupItems);
+    }
+  });
+
+  // 渲染未分组的项目
+  const otherItems = groupedNormalItems.other;
+  if (otherItems.length > 0) {
+    renderItemGroup(container, "other", "其他设置", otherItems);
+  }
+}
+
+function renderItemGroup(container, groupKey, groupName, items) {
+  const groupDiv = document.createElement("div");
+  groupDiv.className = "config-group";
+
+  const groupHeader = document.createElement("div");
+  groupHeader.className = "group-header";
+
+  const groupTitle = document.createElement("h3");
+  groupTitle.className = "group-title";
+  groupTitle.textContent = groupName;
+  groupHeader.appendChild(groupTitle);
+
+  const collapseButton = document.createElement("button");
+  collapseButton.className = "collapse-button";
+  collapseButton.textContent = "▼";
+  collapseButton.dataset.target = `group-${groupKey}-content`;
+  collapseButton.addEventListener("click", () => toggleCollapse(collapseButton.dataset.target));
+  groupHeader.appendChild(collapseButton);
+
+  groupDiv.appendChild(groupHeader);
+
+  const groupContent = document.createElement("div");
+  groupContent.id = `group-${groupKey}-content`;
+  groupContent.className = "group-content";
+
+  items.forEach((item) => {
     const div = document.createElement("div");
     div.className = "config-item";
 
@@ -110,8 +203,11 @@ function renderNormalItems() {
       div.appendChild(input);
     }
 
-    container.appendChild(div);
+    groupContent.appendChild(div);
   });
+
+  groupDiv.appendChild(groupContent);
+  container.appendChild(groupDiv);
 }
 
 function renderMods() {
@@ -294,10 +390,12 @@ function toggleCollapse(targetId) {
   }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   loadConfig();
+  await loadPaths();
 
   document.getElementById("saveButton").addEventListener("click", saveConfig);
+  document.getElementById("savePathsButton").addEventListener("click", savePaths);
 
   document.querySelectorAll(".add-button").forEach((button) => {
     button.addEventListener("click", () => {
@@ -310,4 +408,91 @@ document.addEventListener("DOMContentLoaded", () => {
       toggleCollapse(button.dataset.target);
     });
   });
+
+  document.querySelectorAll(".tab-button").forEach((button) => {
+    button.addEventListener("click", () => {
+      switchTab(button.dataset.tab);
+    });
+  });
 });
+
+function switchTab(tabName) {
+  document.querySelectorAll(".tab-button").forEach((button) => {
+    button.classList.remove("active");
+  });
+  document.querySelectorAll(".tab-content").forEach((content) => {
+    content.classList.remove("active");
+  });
+
+  document.querySelector(`.tab-button[data-tab="${tabName}"]`).classList.add("active");
+  document.getElementById(`${tabName}-tab`).classList.add("active");
+}
+
+async function loadPaths() {
+  try {
+    const response = await fetch("/api/paths");
+    if (response.ok) {
+      const paths = await response.json();
+      document.getElementById("workshopPath").value = paths.workshopPath || "";
+      document.getElementById("iniFilePath").value = paths.iniFilePath || "";
+    } else {
+      // 如果API调用失败，尝试从本地存储加载
+      const workshopPath = localStorage.getItem("workshopPath");
+      const iniFilePath = localStorage.getItem("iniFilePath");
+
+      if (workshopPath) {
+        document.getElementById("workshopPath").value = workshopPath;
+      }
+      if (iniFilePath) {
+        document.getElementById("iniFilePath").value = iniFilePath;
+      }
+    }
+  } catch (error) {
+    console.error("加载路径设置失败:", error);
+    // 从本地存储加载作为后备
+    const workshopPath = localStorage.getItem("workshopPath");
+    const iniFilePath = localStorage.getItem("iniFilePath");
+
+    if (workshopPath) {
+      document.getElementById("workshopPath").value = workshopPath;
+    }
+    if (iniFilePath) {
+      document.getElementById("iniFilePath").value = iniFilePath;
+    }
+  }
+}
+
+async function savePaths() {
+  const saveButton = document.getElementById("savePathsButton");
+  saveButton.disabled = true;
+  setStatus("保存路径设置中...", "");
+
+  try {
+    const workshopPath = document.getElementById("workshopPath").value;
+    const iniFilePath = document.getElementById("iniFilePath").value;
+
+    // 保存到本地存储作为后备
+    localStorage.setItem("workshopPath", workshopPath);
+    localStorage.setItem("iniFilePath", iniFilePath);
+
+    // 发送到后端API
+    const response = await fetch("/api/paths", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ workshopPath, iniFilePath }),
+    });
+
+    if (!response.ok) {
+      throw new Error("保存到服务器失败");
+    }
+
+    setStatus("路径设置保存成功", "success");
+  } catch (error) {
+    setStatus("保存失败: " + error.message, "error");
+    console.error(error);
+  } finally {
+    saveButton.disabled = false;
+  }
+}
