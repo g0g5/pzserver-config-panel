@@ -2,6 +2,7 @@ let configData = null;
 let normalItems = [];
 let modsItems = [];
 let workshopItemsItems = [];
+let mapItems = [];
 
 function setStatus(message, type = "") {
   const footer = document.getElementById("statusMessage");
@@ -39,12 +40,15 @@ function renderConfig() {
   normalItems = [];
   modsItems = [];
   workshopItemsItems = [];
+  mapItems = [];
 
   configData.items.forEach((item) => {
     if (item.key === "Mods") {
       modsItems = item.value ? item.value.split(";").map((s) => s.trim()).filter((s) => s) : [];
     } else if (item.key === "WorkshopItems") {
       workshopItemsItems = item.value ? item.value.split(";").map((s) => s.trim()).filter((s) => s) : [];
+    } else if (item.key === "Map") {
+      mapItems = item.value ? item.value.split(";").map((s) => s.trim()).filter((s) => s) : [];
     } else {
       normalItems.push(item);
     }
@@ -53,6 +57,7 @@ function renderConfig() {
   renderNormalItems();
   renderMods();
   renderWorkshopItems();
+  renderMap();
 }
 
 function renderNormalItems() {
@@ -92,6 +97,10 @@ function renderMods() {
 
 function renderWorkshopItems() {
   renderListEditor("workshopItemsList", workshopItemsItems, "WorkshopItems");
+}
+
+function renderMap() {
+  renderListEditor("mapList", mapItems, "Map");
 }
 
 function renderListEditor(containerId, items, type) {
@@ -143,6 +152,9 @@ function addListItem(type) {
   } else if (type === "WorkshopItems") {
     workshopItemsItems.push("");
     renderWorkshopItems();
+  } else if (type === "Map") {
+    mapItems.push("");
+    renderMap();
   }
 }
 
@@ -153,6 +165,9 @@ function deleteListItem(type, index) {
   } else if (type === "WorkshopItems") {
     workshopItemsItems.splice(index, 1);
     renderWorkshopItems();
+  } else if (type === "Map") {
+    mapItems.splice(index, 1);
+    renderMap();
   }
 }
 
@@ -167,6 +182,11 @@ function moveListItem(type, index, direction) {
     workshopItemsItems[index] = workshopItemsItems[index + direction];
     workshopItemsItems[index + direction] = temp;
     renderWorkshopItems();
+  } else if (type === "Map") {
+    const temp = mapItems[index];
+    mapItems[index] = mapItems[index + direction];
+    mapItems[index + direction] = temp;
+    renderMap();
   }
 }
 
@@ -189,6 +209,11 @@ function gatherConfigItems() {
   items.push({
     key: "WorkshopItems",
     value: workshopItemsItems.filter((s) => s).join(";"),
+  });
+
+  items.push({
+    key: "Map",
+    value: mapItems.filter((s) => s).join(";"),
   });
 
   return items;
