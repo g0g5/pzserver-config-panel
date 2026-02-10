@@ -228,6 +228,16 @@ async function saveConfig() {
   }
 }
 
+function toggleCollapse(targetId) {
+  const content = document.getElementById(targetId);
+  const button = document.querySelector(`.collapse-button[data-target="${targetId}"]`);
+  if (content && button) {
+    const isCollapsed = content.style.display === "none";
+    content.style.display = isCollapsed ? "block" : "none";
+    button.textContent = isCollapsed ? "▼" : "▶";
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   loadConfig();
 
@@ -236,6 +246,12 @@ document.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll(".add-button").forEach((button) => {
     button.addEventListener("click", () => {
       addListItem(button.dataset.type);
+    });
+  });
+
+  document.querySelectorAll(".collapse-button").forEach((button) => {
+    button.addEventListener("click", () => {
+      toggleCollapse(button.dataset.target);
     });
   });
 });
