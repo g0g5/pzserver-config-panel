@@ -38,10 +38,23 @@ const ITEM_GROUPS = {
   }
 };
 
-function setStatus(message, type = "") {
-  const footer = document.getElementById("statusMessage");
-  footer.textContent = message;
-  footer.className = "status-message " + type;
+function showToast(message, type = "info") {
+  const toastContainer = document.getElementById("toastContainer");
+  const toast = document.createElement("div");
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+  
+  toastContainer.appendChild(toast);
+  
+  // 触发动画
+  setTimeout(() => {
+    toast.classList.add("show");
+  }, 10);
+  
+  // 3秒后移除
+  setTimeout(() => {
+    toastContainer.removeChild(toast);
+  }, 3000);
 }
 
 function setConnectionStatus(connected) {
@@ -57,11 +70,11 @@ async function loadConfig() {
     }
     configData = await response.json();
     setConnectionStatus(true);
-    setStatus("配置加载成功", "success");
+    showToast("配置加载成功", "success");
     renderConfig();
   } catch (error) {
     setConnectionStatus(false);
-    setStatus("加载失败: " + error.message, "error");
+    showToast("加载失败: " + error.message, "error");
     console.error(error);
   }
 }
@@ -569,7 +582,7 @@ function gatherConfigItems() {
 async function saveConfig() {
   const saveButton = document.getElementById("saveButton");
   saveButton.disabled = true;
-  setStatus("保存中...", "");
+  showToast("保存中...", "info");
 
   try {
     const items = gatherConfigItems();
@@ -591,9 +604,11 @@ async function saveConfig() {
     }
 
     setStatus("保存成功", "success");
+    showToast("保存成功", "success");
     await loadConfig();
   } catch (error) {
     setStatus("保存失败: " + error.message, "error");
+    showToast("保存失败: " + error.message, "error");
     console.error(error);
   } finally {
     saveButton.disabled = false;
@@ -711,7 +726,7 @@ async function loadPaths() {
 async function savePaths() {
   const saveButton = document.getElementById("savePathsButton");
   saveButton.disabled = true;
-  setStatus("保存路径设置中...", "");
+  showToast("保存路径设置中...", "info");
 
   try {
     const workshopPath = document.getElementById("workshopPath").value;
@@ -735,8 +750,10 @@ async function savePaths() {
     }
 
     setStatus("路径设置保存成功", "success");
+    showToast("路径设置保存成功", "success");
   } catch (error) {
     setStatus("保存失败: " + error.message, "error");
+    showToast("保存失败: " + error.message, "error");
     console.error(error);
   } finally {
     saveButton.disabled = false;
