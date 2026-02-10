@@ -31,3 +31,17 @@ export type PutConfigRequestDto = {
 export type PutConfigResponseDto = {
   ok: true;
 };
+
+export type SubMod = {
+  name: string;
+  id: string;
+  description: string;
+  poster: string;
+  path: string;
+};
+
+export type WorkshopItem = {
+  id: string;
+  isDownloaded: boolean;
+  subMods: SubMod[];
+};

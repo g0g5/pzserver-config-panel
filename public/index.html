@@ -12,38 +12,114 @@
       <span id="configPath" class="config-path"></span>
       <span id="connectionStatus" class="status-indicator"></span>
     </div>
-    <button id="saveButton" class="save-button">保存</button>
+    <div class="header-right">
+      <a href="https://github.com/g0g5/pzserver-config-panel" target="_blank" rel="noopener noreferrer" class="github-button">GitHub</a>
+      <button id="saveButton" class="save-button">保存</button>
+    </div>
   </header>
 
   <main>
-    <div class="main-content">
-      <div class="left-column">
-        <section id="normalItems" class="config-section">
-          <h2>普通配置项</h2>
-          <div id="normalItemsList" class="items-list"></div>
-        </section>
-      </div>
-      <div class="right-column">
-        <section id="modsSection" class="config-section">
-          <h2>Mods (模组)</h2>
-          <div class="list-controls">
-            <button class="add-button" data-type="Mods">添加</button>
-          </div>
-          <div id="modsList" class="list-editor"></div>
-        </section>
+    <div class="tab-navigation">
+      <button class="tab-button active" data-tab="config">配置管理</button>
+      <button class="tab-button" data-tab="paths">路径设置</button>
+    </div>
 
-        <section id="workshopItemsSection" class="config-section">
-          <h2>WorkshopItems (创意工坊)</h2>
-          <div class="list-controls">
-            <button class="add-button" data-type="WorkshopItems">添加</button>
+    <div class="tab-content active" id="config-tab">
+      <div class="main-content">
+        <div class="left-column">
+          <section id="normalItems" class="config-section">
+            <h2>普通配置项</h2>
+            <div id="normalItemsList" class="items-list"></div>
+          </section>
+        </div>
+        <div class="right-column">
+
+          <section id="workshopItemsSection" class="config-section">
+            <div class="section-header">
+              <h2>WorkshopItems (创意工坊)</h2>
+              <button class="collapse-button" data-target="workshopItemsContent">▼</button>
+            </div>
+            <div id="workshopItemsContent" class="section-content">
+              <div class="list-controls">
+                <button class="add-button" data-type="WorkshopItems">添加</button>
+              </div>
+              <div id="workshopItemsList" class="list-editor"></div>
+            </div>
+          </section>
+
+          <section id="modsSection" class="config-section">
+            <div class="section-header">
+              <h2>Mods (模组)</h2>
+              <button class="collapse-button" data-target="modsContent">▼</button>
+            </div>
+            <div id="modsContent" class="section-content">
+              <div class="list-controls">
+                <button class="add-button" data-type="Mods">添加</button>
+              </div>
+              <div id="modsList" class="list-editor"></div>
+            </div>
+          </section>
+
+          <section id="mapSection" class="config-section">
+            <div class="section-header">
+              <h2>Map (地图)</h2>
+              <button class="collapse-button" data-target="mapContent">▼</button>
+            </div>
+            <div id="mapContent" class="section-content">
+              <div class="list-controls">
+                <button class="add-button" data-type="Map">添加</button>
+              </div>
+              <div id="mapList" class="list-editor"></div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-content" id="paths-tab">
+      <div class="config-section">
+        <h2>路径设置</h2>
+        <div class="paths-content">
+          <div class="path-item">
+            <div class="path-label">Workshop 文件夹路径</div>
+            <div class="path-description">创意工坊模组的存储路径，用于自动管理模组</div>
+            <input type="text" id="workshopPath" class="path-input" placeholder="例如: C:/Steam/steamapps/workshop/content/108600">
           </div>
-          <div id="workshopItemsList" class="list-editor"></div>
-        </section>
+          <div class="path-item">
+            <div class="path-label">INI 文件路径</div>
+            <div class="path-description">服务器配置文件的完整路径，用于读取和写入配置</div>
+            <input type="text" id="iniFilePath" class="path-input" placeholder="例如: C:/Servers/PZ/server.ini">
+          </div>
+          <div class="path-actions">
+            <button id="savePathsButton" class="save-button">保存路径设置</button>
+          </div>
+        </div>
       </div>
     </div>
   </main>
 
-  <footer id="statusMessage" class="status-message"></footer>
+  <!-- 添加项目对话框 -->
+  <div id="addItemDialog" class="dialog-overlay">
+    <div class="dialog-content">
+      <div class="dialog-header">
+        <h3 id="dialogTitle">添加项目</h3>
+        <button id="closeDialog" class="dialog-close">&times;</button>
+      </div>
+      <div class="dialog-body">
+        <div class="dialog-input-group">
+          <label for="dialogInput" id="dialogLabel">输入内容</label>
+          <input type="text" id="dialogInput" class="dialog-input" placeholder="请输入内容">
+        </div>
+      </div>
+      <div class="dialog-footer">
+        <button id="cancelDialog" class="dialog-button cancel">取消</button>
+        <button id="confirmDialog" class="dialog-button confirm">确认</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast提示 -->
+  <div id="toastContainer" class="toast-container"></div>
 
   <script src="app.js"></script>
 </body>
