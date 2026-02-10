@@ -307,6 +307,62 @@ function renderWorkshopItems() {
         idDiv.textContent = "ID: " + subMod.id;
         infoDiv.appendChild(idDiv);
 
+        const toggleDiv = document.createElement("div");
+        toggleDiv.className = "submod-toggle";
+        
+        const toggleLabel = document.createElement("label");
+        toggleLabel.className = "toggle";
+        
+        const toggleInput = document.createElement("input");
+        toggleInput.type = "checkbox";
+        
+        // 检查 mods 列表中是否存在该 submod id（忽略以 \ 开头的前缀）
+        const isInMods = modsItems.some(modId => {
+          const cleanModId = modId.startsWith("\\") ? modId.substring(1) : modId;
+          return cleanModId === subMod.id;
+        });
+        toggleInput.checked = isInMods;
+        toggleInput.dataset.submodId = subMod.id;
+        toggleInput.onchange = function() {
+          const isChecked = this.checked;
+          const submodId = this.dataset.submodId;
+          
+          if (isChecked) {
+            // 检查是否已存在（忽略以 \ 开头的前缀）
+            const exists = modsItems.some(modId => {
+              const cleanModId = modId.startsWith("\\") ? modId.substring(1) : modId;
+              return cleanModId === submodId;
+            });
+            
+            if (!exists) {
+              // 自动添加，保持与现有格式一致
+              const hasBackslash = modsItems.some(modId => modId.startsWith("\\"));
+              const modIdToAdd = hasBackslash ? "\\" + submodId : submodId;
+              modsItems.push(modIdToAdd);
+            }
+          } else {
+            // 移除所有匹配的 id（包括带 \ 前缀的）
+            const index = modsItems.findIndex(modId => {
+              const cleanModId = modId.startsWith("\\") ? modId.substring(1) : modId;
+              return cleanModId === submodId;
+            });
+            
+            if (index !== -1) {
+              modsItems.splice(index, 1);
+            }
+          }
+          
+          renderMods();
+        };
+        
+        const toggleSpan = document.createElement("span");
+        toggleSpan.className = "toggle-slider";
+        
+        toggleLabel.appendChild(toggleInput);
+        toggleLabel.appendChild(toggleSpan);
+        toggleDiv.appendChild(toggleLabel);
+        infoDiv.appendChild(toggleDiv);
+
         subModDiv.appendChild(infoDiv);
         subModsDiv.appendChild(subModDiv);
       });
