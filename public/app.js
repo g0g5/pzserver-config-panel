@@ -603,11 +603,9 @@ async function saveConfig() {
       throw new Error(data.error?.message || `保存失败: ${response.status}`);
     }
 
-    setStatus("保存成功", "success");
     showToast("保存成功", "success");
     await loadConfig();
   } catch (error) {
-    setStatus("保存失败: " + error.message, "error");
     showToast("保存失败: " + error.message, "error");
     console.error(error);
   } finally {
@@ -749,10 +747,8 @@ async function savePaths() {
       throw new Error("保存到服务器失败");
     }
 
-    setStatus("路径设置保存成功", "success");
     showToast("路径设置保存成功", "success");
   } catch (error) {
-    setStatus("保存失败: " + error.message, "error");
     showToast("保存失败: " + error.message, "error");
     console.error(error);
   } finally {
