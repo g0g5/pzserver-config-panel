@@ -1,10 +1,10 @@
 import express from "express";
 import { readConfig, saveConfig } from "../config/service.js";
 import { AppError, toErrorResponse } from "../errors/app-error.js";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { parseWorkshopItems } from "../config/workshop-parser.js";
-import { join } from "node:path";
+import { relative, resolve } from "node:path";
 import type { WorkshopItem } from "../types/config.js";
 
 type PathsConfig = {
@@ -113,20 +113,36 @@ export function createConfigRouter(configPath?: string): express.Router {
 
   router.get("/workshop-poster", async (req, res) => {
     try {
-      const { path } = req.query;
-      
-      if (typeof path !== "string" || !path) {
-        throw new AppError("BAD_REQUEST", "Path parameter is required");
+      if (!pathsConfig.workshopPath) {
+        throw new AppError("BAD_REQUEST", "Workshop path is not configured");
       }
-      
-      if (!existsSync(path)) {
+
+      const rel = typeof req.query.rel === "string" ? req.query.rel : "";
+      const legacyPath = typeof req.query.path === "string" ? req.query.path : "";
+
+      if (!rel && !legacyPath) {
+        throw new AppError("BAD_REQUEST", "rel parameter is required");
+      }
+
+      const rootAbs = resolve(pathsConfig.workshopPath);
+      const candidateAbs = rel ? resolve(rootAbs, rel) : resolve(legacyPath);
+
+      const relToRoot = relative(rootAbs, candidateAbs).replace(/\\/g, "/");
+      const isUnderRoot = !!relToRoot && relToRoot !== ".." && !relToRoot.startsWith("../");
+      if (!isUnderRoot) {
+        throw new AppError("BAD_REQUEST", "Invalid poster path");
+      }
+
+      try {
+        const fileStat = await stat(candidateAbs);
+        if (!fileStat.isFile()) {
+          throw new AppError("NOT_FOUND", "Poster file not found");
+        }
+      } catch {
         throw new AppError("NOT_FOUND", "Poster file not found");
       }
-      
-      const ext = path.split(".").pop()?.toLowerCase();
-      const contentType = ext === "png" ? "image/png" : ext === "jpg" || ext === "jpeg" ? "image/jpeg" : "image/*";
-      
-      res.sendFile(path);
+
+      res.sendFile(candidateAbs);
     } catch (error) {
       if (error instanceof AppError) {
         res.status(error.status).json(toErrorResponse(error));

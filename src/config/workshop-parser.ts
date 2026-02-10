@@ -1,9 +1,29 @@
-import { readdir, readFile, access, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { readdir, readFile, stat } from "node:fs/promises";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { existsSync } from "node:fs";
 import type { WorkshopItem, SubMod } from "../types/config.js";
 
-function parseModInfo(content: string, folderPath: string): SubMod | null {
+function toUrlPath(p: string): string {
+  return p.replace(/\\/g, "/");
+}
+
+function hasWindowsDrivePrefix(p: string): boolean {
+  return /^[a-zA-Z]:[\\/]/.test(p);
+}
+
+function resolvePosterFilePath(folderPath: string, posterValue: string): string {
+  const trimmed = posterValue.trim().replace(/^"|"$/g, "").replace(/^'|'$/g, "");
+  if (!trimmed) return "";
+
+  if (isAbsolute(trimmed) || hasWindowsDrivePrefix(trimmed)) {
+    return trimmed;
+  }
+
+  const segments = trimmed.split(/[\\/]+/).filter((s) => s.length > 0);
+  return join(folderPath, ...segments);
+}
+
+function parseModInfo(content: string, folderPath: string, workshopRootPath: string): SubMod | null {
   const lines = content.split(/\r?\n/);
   const result: Partial<SubMod> = {};
 
@@ -25,15 +45,19 @@ function parseModInfo(content: string, folderPath: string): SubMod | null {
 
   if (!result.name || !result.id) return null;
 
-  const posterPath = result.poster ? join(folderPath, result.poster) : "";
-  const hasPoster = posterPath && existsSync(posterPath);
+  const rootAbs = resolve(workshopRootPath);
+  const posterFilePath = result.poster ? resolvePosterFilePath(folderPath, result.poster) : "";
+  const posterAbs = posterFilePath ? resolve(posterFilePath) : "";
+  const posterRelToRoot = posterAbs ? toUrlPath(relative(rootAbs, posterAbs)) : "";
+  const isPosterUnderRoot = !!posterRelToRoot && posterRelToRoot !== ".." && !posterRelToRoot.startsWith("../");
+  const hasPoster = posterAbs && isPosterUnderRoot && existsSync(posterAbs);
 
   return {
     name: result.name,
     id: result.id,
     description: result.description ?? "",
-    poster: hasPoster ? posterPath : "",
-    path: folderPath,
+    poster: hasPoster ? posterRelToRoot : "",
+    path: toUrlPath(relative(rootAbs, resolve(folderPath))),
   };
 }
 
@@ -85,8 +109,8 @@ async function parseWorkshopItem(workshopPath: string, itemId: string): Promise<
   for (const { path: modInfoFile, mtime } of modInfoFiles) {
     try {
       const content = await readFile(modInfoFile, "utf8");
-      const folderPath = modInfoFile.replace(/\\mod\.info$/i, "");
-      const subMod = parseModInfo(content, folderPath);
+      const folderPath = dirname(modInfoFile);
+      const subMod = parseModInfo(content, folderPath, workshopPath);
       if (subMod) {
         const existing = subModsMap.get(subMod.id);
         if (!existing || mtime > existing.mtime) {

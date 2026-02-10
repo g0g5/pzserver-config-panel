@@ -301,7 +301,7 @@ function renderWorkshopItems() {
         if (subMod.poster) {
           const posterImg = document.createElement("img");
           posterImg.className = "submod-poster";
-          posterImg.src = "/api/workshop-poster?path=" + encodeURIComponent(subMod.poster);
+          posterImg.src = "/api/workshop-poster?rel=" + encodeURIComponent(subMod.poster);
           posterImg.alt = subMod.name;
           posterImg.onerror = function() { this.style.display = "none"; };
           subModDiv.appendChild(posterImg);
