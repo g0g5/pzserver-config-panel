@@ -3,6 +3,9 @@ import { readConfig, saveConfig } from "../config/service.js";
 import { AppError, toErrorResponse } from "../errors/app-error.js";
 import { readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
+import { parseWorkshopItems } from "../config/workshop-parser.js";
+import { join } from "node:path";
+import type { WorkshopItem } from "../types/config.js";
 
 type PathsConfig = {
   workshopPath: string;
@@ -53,7 +56,25 @@ export function createConfigRouter(configPath: string): express.Router {
   router.get("/config", async (_req, res) => {
     try {
       const data = await readConfig(configPath);
-      res.json(data);
+      
+      let workshopItems: WorkshopItem[] = [];
+      const workshopItemsItem = data.items.find((item) => item.key === "WorkshopItems");
+      
+      if (workshopItemsItem && workshopItemsItem.value) {
+        const itemIds = workshopItemsItem.value.split(";").map((s) => s.trim()).filter((s) => s);
+        
+        if (pathsConfig.workshopPath && itemIds.length > 0) {
+          workshopItems = await parseWorkshopItems(pathsConfig.workshopPath, itemIds);
+        } else {
+          workshopItems = itemIds.map((id) => ({
+            id,
+            isDownloaded: false,
+            subMods: [],
+          }));
+        }
+      }
+      
+      res.json({ ...data, workshopItems });
     } catch (error) {
       if (error instanceof AppError) {
         res.status(error.status).json(toErrorResponse(error));
@@ -68,6 +89,32 @@ export function createConfigRouter(configPath: string): express.Router {
     try {
       const data = await saveConfig(configPath, req.body);
       res.json(data);
+    } catch (error) {
+      if (error instanceof AppError) {
+        res.status(error.status).json(toErrorResponse(error));
+      } else {
+        const message = error instanceof Error ? error.message : String(error);
+        res.status(500).json({ error: { code: "INTERNAL_ERROR", message } });
+      }
+    }
+  });
+
+  router.get("/workshop-poster", async (req, res) => {
+    try {
+      const { path } = req.query;
+      
+      if (typeof path !== "string" || !path) {
+        throw new AppError("BAD_REQUEST", "Path parameter is required");
+      }
+      
+      if (!existsSync(path)) {
+        throw new AppError("NOT_FOUND", "Poster file not found");
+      }
+      
+      const ext = path.split(".").pop()?.toLowerCase();
+      const contentType = ext === "png" ? "image/png" : ext === "jpg" || ext === "jpeg" ? "image/jpeg" : "image/*";
+      
+      res.sendFile(path);
     } catch (error) {
       if (error instanceof AppError) {
         res.status(error.status).json(toErrorResponse(error));

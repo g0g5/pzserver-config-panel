@@ -2,6 +2,7 @@ let configData = null;
 let normalItems = [];
 let modsItems = [];
 let workshopItemsItems = [];
+let workshopItemsData = [];
 let mapItems = [];
 let groupedNormalItems = {};
 
@@ -72,6 +73,7 @@ function renderConfig() {
   normalItems = [];
   modsItems = [];
   workshopItemsItems = [];
+  workshopItemsData = configData.workshopItems || [];
   mapItems = [];
   groupedNormalItems = {};
 
@@ -215,7 +217,105 @@ function renderMods() {
 }
 
 function renderWorkshopItems() {
-  renderListEditor("workshopItemsList", workshopItemsItems, "WorkshopItems");
+  const container = document.getElementById("workshopItemsList");
+  container.innerHTML = "";
+
+  workshopItemsItems.forEach((itemId, index) => {
+    const workshopItem = workshopItemsData.find((wi) => wi.id === itemId) || { id: itemId, isDownloaded: false, subMods: [] };
+    const div = document.createElement("div");
+    div.className = "workshop-item";
+
+    const headerDiv = document.createElement("div");
+    headerDiv.className = "workshop-item-header";
+
+    const statusIndicator = document.createElement("span");
+    statusIndicator.className = "workshop-status " + (workshopItem.isDownloaded ? "downloaded" : "not-downloaded");
+    statusIndicator.textContent = workshopItem.isDownloaded ? "✓" : "✗";
+    statusIndicator.title = workshopItem.isDownloaded ? "已下载" : "未下载";
+    headerDiv.appendChild(statusIndicator);
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "list-item-input";
+    input.value = itemId;
+    input.dataset.index = index;
+    input.dataset.type = "WorkshopItems";
+    headerDiv.appendChild(input);
+
+    const buttonsDiv = document.createElement("div");
+    buttonsDiv.className = "workshop-buttons";
+
+    const upBtn = document.createElement("button");
+    upBtn.className = "list-button";
+    upBtn.textContent = "↑";
+    upBtn.title = "上移";
+    upBtn.disabled = index === 0;
+    upBtn.onclick = () => moveListItem("WorkshopItems", index, -1);
+    buttonsDiv.appendChild(upBtn);
+
+    const downBtn = document.createElement("button");
+    downBtn.className = "list-button";
+    downBtn.textContent = "↓";
+    downBtn.title = "下移";
+    downBtn.disabled = index === workshopItemsItems.length - 1;
+    downBtn.onclick = () => moveListItem("WorkshopItems", index, 1);
+    buttonsDiv.appendChild(downBtn);
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "list-button delete";
+    deleteBtn.textContent = "删除";
+    deleteBtn.onclick = () => deleteListItem("WorkshopItems", index);
+    buttonsDiv.appendChild(deleteBtn);
+
+    headerDiv.appendChild(buttonsDiv);
+    div.appendChild(headerDiv);
+
+    if (workshopItem.isDownloaded && workshopItem.subMods.length > 0) {
+      const subModsDiv = document.createElement("div");
+      subModsDiv.className = "submods-container";
+
+      workshopItem.subMods.forEach((subMod) => {
+        const subModDiv = document.createElement("div");
+        subModDiv.className = "submod-item";
+
+        if (subMod.poster) {
+          const posterImg = document.createElement("img");
+          posterImg.className = "submod-poster";
+          posterImg.src = "/api/workshop-poster?path=" + encodeURIComponent(subMod.poster);
+          posterImg.alt = subMod.name;
+          posterImg.onerror = function() { this.style.display = "none"; };
+          subModDiv.appendChild(posterImg);
+        }
+
+        const infoDiv = document.createElement("div");
+        infoDiv.className = "submod-info";
+
+        const nameDiv = document.createElement("div");
+        nameDiv.className = "submod-name";
+        nameDiv.textContent = subMod.name;
+        infoDiv.appendChild(nameDiv);
+
+        if (subMod.description) {
+          const descDiv = document.createElement("div");
+          descDiv.className = "submod-description";
+          descDiv.textContent = subMod.description;
+          infoDiv.appendChild(descDiv);
+        }
+
+        const idDiv = document.createElement("div");
+        idDiv.className = "submod-id";
+        idDiv.textContent = "ID: " + subMod.id;
+        infoDiv.appendChild(idDiv);
+
+        subModDiv.appendChild(infoDiv);
+        subModsDiv.appendChild(subModDiv);
+      });
+
+      div.appendChild(subModsDiv);
+    }
+
+    container.appendChild(div);
+  });
 }
 
 function renderMap() {
