@@ -80,12 +80,35 @@ function renderNormalItems() {
       div.appendChild(desc);
     }
 
-    const input = document.createElement("input");
-    input.type = "text";
-    input.className = "item-input";
-    input.value = item.value;
-    input.dataset.key = item.key;
-    div.appendChild(input);
+    const isBooleanValue = item.value === "true" || item.value === "false";
+
+    if (isBooleanValue) {
+      const toggleContainer = document.createElement("div");
+      toggleContainer.className = "toggle-container";
+
+      const toggle = document.createElement("label");
+      toggle.className = "toggle";
+
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.checked = item.value === "true";
+      input.dataset.key = item.key;
+      toggle.appendChild(input);
+
+      const span = document.createElement("span");
+      span.className = "toggle-slider";
+      toggle.appendChild(span);
+
+      toggleContainer.appendChild(toggle);
+      div.appendChild(toggleContainer);
+    } else {
+      const input = document.createElement("input");
+      input.type = "text";
+      input.className = "item-input";
+      input.value = item.value;
+      input.dataset.key = item.key;
+      div.appendChild(input);
+    }
 
     container.appendChild(div);
   });
@@ -198,6 +221,14 @@ function gatherConfigItems() {
     items.push({
       key: input.dataset.key,
       value: input.value,
+    });
+  });
+
+  const toggleInputs = document.querySelectorAll("#normalItemsList .toggle input[type='checkbox']");
+  toggleInputs.forEach((input) => {
+    items.push({
+      key: input.dataset.key,
+      value: input.checked ? "true" : "false",
     });
   });
 
