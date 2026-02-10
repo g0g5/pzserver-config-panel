@@ -89,9 +89,25 @@ header {
 main {
   flex: 1;
   padding: 2rem;
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
   width: 100%;
+}
+
+.main-content {
+  display: flex;
+  gap: 2rem;
+  align-items: flex-start;
+}
+
+.left-column {
+  flex: 1;
+  min-width: 0;
+}
+
+.right-column {
+  flex: 1;
+  min-width: 0;
 }
 
 .config-section {
@@ -100,6 +116,10 @@ main {
   border-radius: 8px;
   padding: 1.5rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.right-column .config-section:last-child {
+  margin-bottom: 0;
 }
 
 .config-section h2 {
@@ -270,6 +290,10 @@ footer {
 
   .config-path {
     max-width: 100%;
+  }
+
+  .main-content {
+    flex-direction: column;
   }
 
   .list-item {
