@@ -27,22 +27,25 @@ V2 使用 `servers-config.json` 替代原有的 `paths-config.json`，支持多�
 
 ```json
 {
-  "workshopPath": "/path/to/steamapps/workshop/content/108600",
-  "stopGraceTimeoutMs": 30000,
-  "forceKillTimeoutMs": 10000,
+  "global": {
+    "workshopPath": "/path/to/steamapps/workshop/content/108600",
+    "startScriptPath": "/path/to/start-server.sh",
+    "stopGraceTimeoutMs": 30000,
+    "forceKillTimeoutMs": 10000
+  },
   "servers": [
     {
       "id": "main-server",
       "name": "主服务器",
       "iniPath": "/path/to/server.ini",
-      "startCommand": "/path/to/start-server.sh",
+      "startArgs": ["-servername", "main"],
       "stopCommands": ["save", "quit"]
     },
     {
       "id": "test-server",
       "name": "测试服务器",
       "iniPath": "/path/to/test.ini",
-      "startCommand": "/path/to/start-test.sh",
+      "startArgs": ["-servername", "test"],
       "stopCommands": ["save", "quit"]
     }
   ]
@@ -51,17 +54,24 @@ V2 使用 `servers-config.json` 替代原有的 `paths-config.json`，支持多�
 
 ### 配置项说明
 
+**全局配置 (`global`)**
+
 | 配置项 | 类型 | 必填 | 说明 |
 |--------|------|------|------|
 | `workshopPath` | string | 是 | Steam Workshop 的 `108600` 目录完整路径 |
-| `stopGraceTimeoutMs` | number | 否 | 优雅停止超时（默认 45000ms） |
+| `startScriptPath` | string | 是 | 服务器启动脚本路径 |
+| `stopGraceTimeoutMs` | number | 否 | 优雅停止超时（默认 30000ms） |
 | `forceKillTimeoutMs` | number | 否 | 强制终止超时（默认 10000ms） |
-| `servers` | array | 是 | 服务器实例数组 |
-| `servers[].id` | string | 是 | 实例唯一标识（英文、数字、连字符） |
-| `servers[].name` | string | 是 | 实例显示名称 |
-| `servers[].iniPath` | string | 是 | 服务器 `.ini` 配置文件绝对路径 |
-| `servers[].startCommand` | string | 是 | 服务器启动命令 |
-| `servers[].stopCommands` | string[] | 否 | 停止时按顺序发送的命令（默认 `["save", "quit"]`） |
+
+**服务器实例配置 (`servers[]`)**
+
+| 配置项 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| `id` | string | 是 | 实例唯一标识（英文、数字、连字符） |
+| `name` | string | 是 | 实例显示名称 |
+| `iniPath` | string | 是 | 服务器 `.ini` 配置文件绝对路径 |
+| `startArgs` | string[] | 否 | 启动参数（如 `["-servername", "main"]`） |
+| `stopCommands` | string[] | 否 | 停止时按顺序发送的命令（默认 `["save", "quit"]`） |
 
 ## 从 V1.5 迁移
 
@@ -69,10 +79,10 @@ V2 会自动从 `paths-config.json` 迁移配置：
 
 1. 首次启动时，若存在 `paths-config.json`，会自动生成 `servers-config.json`
 2. `iniFilePath` 会转为第一个服务器实例的 `iniPath`
-3. `workshopPath` 会保留
-4. 自动生成默认的 `startCommand` 和 `stopCommands`
+3. `workshopPath` 会保留在 `global` 对象中
+4. 自动生成默认的 `startScriptPath`（需手动配置）和 `stopCommands`
 
-建议迁移后在 Web 界面中编辑实例，完善 `startCommand` 和 `stopCommands`。
+建议迁移后在 Web 界面中编辑实例，完善 `global.startScriptPath` 和实例的 `startArgs`。
 
 ## 安装
 
