@@ -35,6 +35,11 @@ export type ServerRuntimeState = {
   lastExit: ServerLastExit | null;
 };
 
+export type ServersRuntimeSnapshot = {
+  activeServerId: string | null;
+  servers: ServerRuntimeState[];
+};
+
 export type TerminalLine = {
   timestamp: string;
   stream: "stdout" | "stderr" | "system";

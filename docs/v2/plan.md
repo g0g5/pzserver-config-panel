@@ -256,6 +256,14 @@
 
 执行：步骤 3、4、5（运行控制 API）。
 
+完成情况（2026-02-18）：
+
+- 状态：已完成。
+- 步骤 3（运行时管理器）已落地：新增 `src/runtime/manager.ts`，维护实例运行态与 `activeServerId`，并严格执行“同一时刻仅允许一个实例处于 starting/running/stopping”约束。
+- 步骤 4（启动/停止服务）已落地：启动基于实例 `startCommand` 拉起子进程并记录 `pid/startedAt/lastExit`；停止按 `stopCommands -> stopGraceTimeoutMs -> SIGTERM -> forceKillTimeoutMs -> SIGKILL` 流程执行，异常超时返回 `STOP_TIMEOUT`。
+- 步骤 5（运行控制 API）已落地：新增 `src/routes/servers-runtime.ts`，提供 `GET /api/servers/runtime`、`POST /api/servers/:id/start`、`POST /api/servers/:id/stop`，并接入统一冲突语义（`ANOTHER_SERVER_RUNNING`、`SERVER_ALREADY_RUNNING`、`SERVER_NOT_RUNNING`）。
+- 测试已补齐：新增 `tests/runtime-manager.test.ts` 覆盖单活冲突、重复启动、停止未运行实例与启动失败场景。
+
 ### M3：终端能力
 
 执行：步骤 6、7、8。

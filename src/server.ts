@@ -3,8 +3,10 @@ import {
   createHealthRouter,
   createConfigRouter,
   createServersConfigRouter,
+  createServersRuntimeRouter,
 } from "./routes/index.js";
 import { errorHandler } from "./middleware/error-handler.js";
+import { ServerRuntimeManager } from "./runtime/manager.js";
 
 type StartupOptions = {
   configPath?: string;
@@ -77,6 +79,7 @@ try {
 }
 
 const app = express();
+const runtimeManager = new ServerRuntimeManager();
 
 app.use(express.static("public"));
 app.use(express.json());
@@ -84,6 +87,10 @@ app.use(express.json());
 app.use("/api", createHealthRouter());
 app.use("/api", createConfigRouter(startupOptions.configPath || ""));
 app.use("/api", createServersConfigRouter(startupOptions.configPath || ""));
+app.use(
+  "/api",
+  createServersRuntimeRouter(runtimeManager, startupOptions.configPath || ""),
+);
 
 app.use(errorHandler);
 

@@ -1,0 +1,453 @@
+import {
+  spawn,
+  type ChildProcessWithoutNullStreams,
+  type SpawnOptionsWithoutStdio,
+} from "node:child_process";
+import type { Writable } from "node:stream";
+import { AppError } from "../errors/app-error.js";
+import type {
+  ServerInstance,
+  ServerLastExit,
+  ServerRuntimeState,
+  ServerRuntimeStatus,
+  ServersRuntimeSnapshot,
+} from "../types/server.js";
+
+type RuntimeRecord = {
+  state: ServerRuntimeState;
+  process: ChildProcessWithoutNullStreams | null;
+};
+
+type SpawnProcess = (
+  command: string,
+  options: SpawnOptionsWithoutStdio,
+) => ChildProcessWithoutNullStreams;
+
+type TimerHandle = ReturnType<typeof setTimeout>;
+
+export type StopServerOptions = {
+  stopGraceTimeoutMs: number;
+  forceKillTimeoutMs: number;
+};
+
+export type ServerRuntimeManagerOptions = {
+  startupProbeMs?: number;
+  spawnProcess?: SpawnProcess;
+  now?: () => Date;
+  setTimeoutFn?: (handler: () => void, timeoutMs: number) => TimerHandle;
+  clearTimeoutFn?: (handle: TimerHandle) => void;
+};
+
+const ACTIVE_STATUSES: ServerRuntimeStatus[] = ["starting", "running", "stopping"];
+const DEFAULT_STARTUP_PROBE_MS = 300;
+
+function isActiveStatus(status: ServerRuntimeStatus): boolean {
+  return ACTIVE_STATUSES.includes(status);
+}
+
+function cloneLastExit(lastExit: ServerLastExit | null): ServerLastExit | null {
+  if (!lastExit) {
+    return null;
+  }
+
+  return { ...lastExit };
+}
+
+function cloneState(state: ServerRuntimeState): ServerRuntimeState {
+  return {
+    serverId: state.serverId,
+    status: state.status,
+    pid: state.pid,
+    startedAt: state.startedAt,
+    lastExit: cloneLastExit(state.lastExit),
+  };
+}
+
+function createDefaultState(serverId: string): ServerRuntimeState {
+  return {
+    serverId,
+    status: "stopped",
+    pid: null,
+    startedAt: null,
+    lastExit: null,
+  };
+}
+
+function defaultSpawnProcess(
+  command: string,
+  options: SpawnOptionsWithoutStdio,
+): ChildProcessWithoutNullStreams {
+  return spawn(command, options) as ChildProcessWithoutNullStreams;
+}
+
+export class ServerRuntimeManager {
+  private readonly records = new Map<string, RuntimeRecord>();
+
+  private activeServerId: string | null = null;
+
+  private readonly startupProbeMs: number;
+
+  private readonly spawnProcess: SpawnProcess;
+
+  private readonly now: () => Date;
+
+  private readonly setTimeoutFn: (handler: () => void, timeoutMs: number) => TimerHandle;
+
+  private readonly clearTimeoutFn: (handle: TimerHandle) => void;
+
+  public constructor(options: ServerRuntimeManagerOptions = {}) {
+    this.startupProbeMs = options.startupProbeMs ?? DEFAULT_STARTUP_PROBE_MS;
+    this.spawnProcess = options.spawnProcess ?? defaultSpawnProcess;
+    this.now = options.now ?? (() => new Date());
+    this.setTimeoutFn = options.setTimeoutFn ?? setTimeout;
+    this.clearTimeoutFn = options.clearTimeoutFn ?? clearTimeout;
+  }
+
+  public getRuntimeSnapshot(servers: ServerInstance[]): ServersRuntimeSnapshot {
+    const serverStates = servers.map((server) => {
+      const record = this.ensureRecord(server.id);
+      return cloneState(record.state);
+    });
+
+    if (this.activeServerId) {
+      const activeRecord = this.records.get(this.activeServerId);
+      if (!activeRecord || !isActiveStatus(activeRecord.state.status)) {
+        this.activeServerId = null;
+      }
+    }
+
+    return {
+      activeServerId: this.activeServerId,
+      servers: serverStates,
+    };
+  }
+
+  public async startServer(server: ServerInstance): Promise<ServerRuntimeState> {
+    const record = this.ensureRecord(server.id);
+
+    if (isActiveStatus(record.state.status)) {
+      throw new AppError("SERVER_ALREADY_RUNNING", `Server is already active: ${server.id}`);
+    }
+
+    this.ensureNoAnotherServerActive(server.id);
+
+    record.state.status = "starting";
+    record.state.pid = null;
+    record.state.startedAt = null;
+    this.activeServerId = server.id;
+
+    let child: ChildProcessWithoutNullStreams;
+    try {
+      child = this.spawnProcess(server.startCommand, {
+        shell: true,
+        detached: true,
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+    } catch (error) {
+      this.markStartFailed(server.id);
+      const message = error instanceof Error ? error.message : String(error);
+      throw new AppError("PROCESS_SPAWN_FAILED", `Failed to start server: ${message}`);
+    }
+
+    record.process = child;
+    record.state.pid = child.pid ?? null;
+    record.state.startedAt = this.now().toISOString();
+    this.attachProcessListeners(server.id, child);
+
+    try {
+      await this.waitForStartup(child);
+    } catch (error) {
+      this.markStartFailed(server.id);
+      const message = error instanceof Error ? error.message : String(error);
+      throw new AppError("PROCESS_SPAWN_FAILED", `Failed to start server: ${message}`);
+    }
+
+    if (record.state.status === "starting") {
+      record.state.status = "running";
+    }
+
+    return cloneState(record.state);
+  }
+
+  public async stopServer(
+    server: ServerInstance,
+    options: StopServerOptions,
+  ): Promise<ServerRuntimeState> {
+    const record = this.ensureRecord(server.id);
+    if (record.state.status !== "running") {
+      throw new AppError("SERVER_NOT_RUNNING", `Server is not running: ${server.id}`);
+    }
+
+    const child = record.process;
+    if (!child) {
+      record.state.status = "stopped";
+      throw new AppError("SERVER_NOT_RUNNING", `Server is not running: ${server.id}`);
+    }
+
+    record.state.status = "stopping";
+    await this.sendStopCommands(child, server.stopCommands);
+
+    let exited = await this.waitForExit(child, options.stopGraceTimeoutMs);
+    if (!exited) {
+      this.killProcess(record, "SIGTERM");
+      exited = await this.waitForExit(child, options.forceKillTimeoutMs);
+    }
+
+    if (!exited) {
+      this.killProcess(record, "SIGKILL");
+      exited = await this.waitForExit(child, options.forceKillTimeoutMs);
+    }
+
+    if (!exited) {
+      record.state.status = "error";
+      record.state.pid = null;
+      record.state.startedAt = null;
+      record.state.lastExit = {
+        code: null,
+        signal: null,
+        at: this.now().toISOString(),
+      };
+      if (this.activeServerId === server.id) {
+        this.activeServerId = null;
+      }
+      throw new AppError("STOP_TIMEOUT", `Timed out stopping server: ${server.id}`);
+    }
+
+    return cloneState(record.state);
+  }
+
+  private ensureRecord(serverId: string): RuntimeRecord {
+    const existing = this.records.get(serverId);
+    if (existing) {
+      return existing;
+    }
+
+    const created: RuntimeRecord = {
+      state: createDefaultState(serverId),
+      process: null,
+    };
+    this.records.set(serverId, created);
+    return created;
+  }
+
+  private ensureNoAnotherServerActive(targetServerId: string): void {
+    for (const [serverId, record] of this.records.entries()) {
+      if (serverId === targetServerId) {
+        continue;
+      }
+
+      if (isActiveStatus(record.state.status)) {
+        throw new AppError(
+          "ANOTHER_SERVER_RUNNING",
+          `Another server is active: ${serverId}`,
+        );
+      }
+    }
+  }
+
+  private attachProcessListeners(
+    serverId: string,
+    child: ChildProcessWithoutNullStreams,
+  ): void {
+    child.stdout.on("data", () => undefined);
+    child.stderr.on("data", () => undefined);
+
+    child.once("error", () => {
+      const record = this.ensureRecord(serverId);
+      if (record.process !== child) {
+        return;
+      }
+
+      record.process = null;
+      record.state.status = "error";
+      record.state.pid = null;
+      record.state.startedAt = null;
+      record.state.lastExit = {
+        code: null,
+        signal: null,
+        at: this.now().toISOString(),
+      };
+      if (this.activeServerId === serverId) {
+        this.activeServerId = null;
+      }
+    });
+
+    child.once("exit", (code, signal) => {
+      const record = this.ensureRecord(serverId);
+      if (record.process !== child) {
+        return;
+      }
+
+      record.process = null;
+      record.state.pid = null;
+      record.state.startedAt = null;
+      record.state.lastExit = {
+        code,
+        signal,
+        at: this.now().toISOString(),
+      };
+
+      if (record.state.status !== "error") {
+        record.state.status = "stopped";
+      }
+
+      if (this.activeServerId === serverId) {
+        this.activeServerId = null;
+      }
+    });
+  }
+
+  private waitForStartup(child: ChildProcessWithoutNullStreams): Promise<void> {
+    if (this.startupProbeMs <= 0) {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const timer = this.setTimeoutFn(() => {
+        cleanup();
+        settled = true;
+        resolve();
+      }, this.startupProbeMs);
+
+      const onError = (error: Error) => {
+        if (settled) {
+          return;
+        }
+        cleanup();
+        settled = true;
+        reject(error);
+      };
+
+      const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
+        if (settled) {
+          return;
+        }
+        cleanup();
+        settled = true;
+        reject(new Error(`Process exited early (code=${code}, signal=${signal})`));
+      };
+
+      const cleanup = () => {
+        child.off("error", onError);
+        child.off("exit", onExit);
+        this.clearTimeoutFn(timer);
+      };
+
+      child.once("error", onError);
+      child.once("exit", onExit);
+    });
+  }
+
+  private waitForExit(
+    child: ChildProcessWithoutNullStreams,
+    timeoutMs: number,
+  ): Promise<boolean> {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      return Promise.resolve(true);
+    }
+
+    return new Promise((resolve) => {
+      let settled = false;
+      const onExit = () => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        cleanup();
+        resolve(true);
+      };
+
+      const timer = this.setTimeoutFn(() => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        cleanup();
+        resolve(false);
+      }, timeoutMs);
+
+      const cleanup = () => {
+        child.off("exit", onExit);
+        this.clearTimeoutFn(timer);
+      };
+
+      child.once("exit", onExit);
+    });
+  }
+
+  private killProcess(record: RuntimeRecord, signal: NodeJS.Signals): void {
+    const child = record.process;
+    if (!child || child.pid === undefined) {
+      return;
+    }
+
+    const pid = child.pid;
+
+    try {
+      process.kill(-pid, signal);
+      return;
+    } catch {
+      // no-op, fallback to direct child signal below
+    }
+
+    try {
+      child.kill(signal);
+    } catch {
+      // no-op
+    }
+  }
+
+  private markStartFailed(serverId: string): void {
+    const record = this.ensureRecord(serverId);
+    record.process = null;
+    record.state.status = "error";
+    record.state.pid = null;
+    record.state.startedAt = null;
+    if (!record.state.lastExit) {
+      record.state.lastExit = {
+        code: null,
+        signal: null,
+        at: this.now().toISOString(),
+      };
+    }
+    if (this.activeServerId === serverId) {
+      this.activeServerId = null;
+    }
+  }
+
+  private async sendStopCommands(
+    child: ChildProcessWithoutNullStreams,
+    commands: string[],
+  ): Promise<void> {
+    if (!child.stdin || child.stdin.destroyed || !child.stdin.writable) {
+      return;
+    }
+
+    for (const command of commands) {
+      const normalized = command.trim();
+      if (!normalized) {
+        continue;
+      }
+
+      try {
+        await this.writeToStdin(child.stdin, `${normalized}\n`);
+      } catch {
+        return;
+      }
+    }
+  }
+
+  private writeToStdin(stream: Writable, text: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      stream.write(text, (error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve();
+      });
+    });
+  }
+}
