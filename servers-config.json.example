@@ -1,14 +1,23 @@
 {
-  "workshopPath": "/home/steam/Steam/steamapps/workshop/content/108600",
-  "stopGraceTimeoutMs": 45000,
-  "forceKillTimeoutMs": 10000,
+  "global": {
+    "workshopPath": "/workshop",
+    "startScriptPath": "/start.sh",
+    "stopGraceTimeoutMs": 30000,
+    "forceKillTimeoutMs": 10000
+  },
   "servers": [
     {
-      "id": "servertest",
-      "name": "主服",
-      "iniPath": "/home/steam/Zomboid/Server/servertest.ini",
-      "startCommand": "/home/steam/pz/start-servertest.sh",
-      "stopCommands": ["save", "quit"]
+      "id": "test-server",
+      "name": "Test",
+      "iniPath": "/tmp/pzserver-config-panel-v2-test-1771391255328/api-test.ini",
+      "startArgs": [
+        "-servername",
+        "test"
+      ],
+      "stopCommands": [
+        "save",
+        "quit"
+      ]
     }
   ]
 }
