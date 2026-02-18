@@ -268,6 +268,18 @@
 
 执行：步骤 6、7、8。
 
+完成情况（2026-02-18）：
+
+- 状态：已完成。
+- 步骤 6（终端日志流）已落地：新增 `src/runtime/terminal-buffer.ts` 实现环形缓冲区（2000 行），`ServerRuntimeManager` 集成 stdout/stderr 采集与 SSE 实时推送，`GET /api/servers/:id/terminal/stream` 支持连接时历史回放。
+- 步骤 7（终端命令发送）已落地：`POST /api/servers/:id/terminal/commands` 支持多行命令批量发送，自动过滤空行并返回批次结果 `{successCount, errors}`，非运行态返回 409。
+- 步骤 8（命令补全）已落地：新增 `src/rules/admin-commands.zh-CN.ts` 包含 42 条 PZ 管理命令词库，`GET /api/terminal/commands?prefix=<text>` 支持前缀匹配与别名搜索。
+- 新增测试覆盖：
+  - `tests/terminal-buffer.test.ts`（5 个测试）
+  - `tests/admin-commands.test.ts`（8 个测试）
+  - `tests/runtime-manager.test.ts` 补充 6 个终端相关测试
+- 总计 74 个测试全部通过。
+
 ### M4：前端整合与回归发布
 
 执行：步骤 9、10、11、12。

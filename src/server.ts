@@ -4,6 +4,8 @@ import {
   createConfigRouter,
   createServersConfigRouter,
   createServersRuntimeRouter,
+  createTerminalRouter,
+  createTerminalCommandsRouter,
 } from "./routes/index.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { ServerRuntimeManager } from "./runtime/manager.js";
@@ -91,6 +93,11 @@ app.use(
   "/api",
   createServersRuntimeRouter(runtimeManager, startupOptions.configPath || ""),
 );
+app.use(
+  "/api",
+  createTerminalRouter(runtimeManager, startupOptions.configPath || ""),
+);
+app.use("/api", createTerminalCommandsRouter());
 
 app.use(errorHandler);
 

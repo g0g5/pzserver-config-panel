@@ -106,4 +106,120 @@ describe("ServerRuntimeManager", () => {
     expect(snapshot.servers[0].status).toBe("error");
     expect(snapshot.servers[0].lastExit).not.toBeNull();
   });
+
+  describe("Terminal functionality", () => {
+    it("should record stdout to terminal buffer", async () => {
+      const manager = new ServerRuntimeManager({ startupProbeMs: 80 });
+      const server = createServer({
+        id: "echo",
+        name: "Echo",
+        startCommand: "node -e \"console.log('hello world'); setInterval(() => {}, 1000)\"",
+      });
+
+      await manager.startServer(server);
+
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      const history = manager.getTerminalHistory("echo");
+      expect(history.length).toBeGreaterThan(0);
+      expect(history.some((line) => line.text.includes("hello world"))).toBe(true);
+
+      await manager.stopServer(server, STOP_OPTIONS);
+    });
+
+    it("should record stderr to terminal buffer", async () => {
+      const manager = new ServerRuntimeManager({ startupProbeMs: 80 });
+      const server = createServer({
+        id: "stderr",
+        name: "Stderr",
+        startCommand: "node -e \"console.error('error message'); setInterval(() => {}, 1000)\"",
+      });
+
+      await manager.startServer(server);
+
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      const history = manager.getTerminalHistory("stderr");
+      expect(history.length).toBeGreaterThan(0);
+      expect(history.some((line) => line.stream === "stderr" && line.text.includes("error message"))).toBe(true);
+
+      await manager.stopServer(server, STOP_OPTIONS);
+    });
+
+    it("should notify terminal listeners", async () => {
+      const manager = new ServerRuntimeManager({ startupProbeMs: 80 });
+      const server = createServer({
+        id: "notify",
+        name: "Notify",
+        startCommand: "node -e \"console.log('test'); setInterval(() => {}, 1000)\"",
+      });
+
+      const receivedLines: any[] = [];
+      const listener = (line: any) => {
+        receivedLines.push(line);
+      };
+
+      manager.subscribeTerminal("notify", listener);
+      await manager.startServer(server);
+
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      expect(receivedLines.length).toBeGreaterThan(0);
+      expect(receivedLines.some((line) => line.text.includes("test"))).toBe(true);
+
+      manager.unsubscribeTerminal("notify", listener);
+      await manager.stopServer(server, STOP_OPTIONS);
+    });
+
+    it("should send commands to running server", async () => {
+      const manager = new ServerRuntimeManager({ startupProbeMs: 80 });
+      const server = createServer({
+        id: "commands",
+        name: "Commands",
+        startCommand: "node -e \"const rl=require('readline').createInterface({input:process.stdin});rl.on('line',l=>console.log('ECHO:',l));setInterval(()=>{},1000)\"",
+      });
+
+      await manager.startServer(server);
+
+      const result = await manager.sendCommands("commands", "hello\nworld");
+
+      expect(result.successCount).toBe(2);
+      expect(result.errors).toHaveLength(0);
+
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      const history = manager.getTerminalHistory("commands");
+      expect(history.some((line) => line.text.includes("> hello"))).toBe(true);
+      expect(history.some((line) => line.text.includes("> world"))).toBe(true);
+
+      await manager.stopServer(server, STOP_OPTIONS);
+    });
+
+    it("should reject sending commands when server not running", async () => {
+      const manager = new ServerRuntimeManager();
+
+      await expect(manager.sendCommands("stopped", "test")).rejects.toMatchObject({
+        code: "SERVER_NOT_RUNNING",
+        status: 409,
+      });
+    });
+
+    it("should return batch result with errors for failed lines", async () => {
+      const manager = new ServerRuntimeManager({ startupProbeMs: 80 });
+      const server = createServer({
+        id: "batch",
+        name: "Batch",
+        startCommand: "node -e \"console.log('start'); setInterval(() => {}, 1000)\"",
+      });
+
+      await manager.startServer(server);
+
+      const result = await manager.sendCommands("batch", "line1\n\nline2");
+
+      expect(result.successCount).toBe(2);
+      expect(result.errors).toHaveLength(0);
+
+      await manager.stopServer(server, STOP_OPTIONS);
+    });
+  });
 });

@@ -11,11 +11,15 @@ import type {
   ServerRuntimeState,
   ServerRuntimeStatus,
   ServersRuntimeSnapshot,
+  TerminalLine,
 } from "../types/server.js";
+import { TerminalRingBuffer } from "./terminal-buffer.js";
 
 type RuntimeRecord = {
   state: ServerRuntimeState;
   process: ChildProcessWithoutNullStreams | null;
+  terminalBuffer: TerminalRingBuffer;
+  listeners: Set<(line: TerminalLine) => void>;
 };
 
 type SpawnProcess = (
@@ -225,6 +229,8 @@ export class ServerRuntimeManager {
     const created: RuntimeRecord = {
       state: createDefaultState(serverId),
       process: null,
+      terminalBuffer: new TerminalRingBuffer(),
+      listeners: new Set(),
     };
     this.records.set(serverId, created);
     return created;
@@ -249,14 +255,50 @@ export class ServerRuntimeManager {
     serverId: string,
     child: ChildProcessWithoutNullStreams,
   ): void {
-    child.stdout.on("data", () => undefined);
-    child.stderr.on("data", () => undefined);
+    const record = this.ensureRecord(serverId);
 
-    child.once("error", () => {
-      const record = this.ensureRecord(serverId);
+    child.stdout.on("data", (data: Buffer) => {
+      const lines = data.toString("utf-8").split(/\r?\n/);
+      for (const line of lines) {
+        if (line || lines.indexOf(line) < lines.length - 1) {
+          const terminalLine: TerminalLine = {
+            timestamp: this.now().toISOString(),
+            stream: "stdout",
+            text: line,
+          };
+          record.terminalBuffer.append(terminalLine);
+          this.notifyListeners(record, terminalLine);
+        }
+      }
+    });
+
+    child.stderr.on("data", (data: Buffer) => {
+      const lines = data.toString("utf-8").split(/\r?\n/);
+      for (const line of lines) {
+        if (line || lines.indexOf(line) < lines.length - 1) {
+          const terminalLine: TerminalLine = {
+            timestamp: this.now().toISOString(),
+            stream: "stderr",
+            text: line,
+          };
+          record.terminalBuffer.append(terminalLine);
+          this.notifyListeners(record, terminalLine);
+        }
+      }
+    });
+
+    child.once("error", (error: Error) => {
       if (record.process !== child) {
         return;
       }
+
+      const systemLine: TerminalLine = {
+        timestamp: this.now().toISOString(),
+        stream: "system",
+        text: `Process error: ${error.message}`,
+      };
+      record.terminalBuffer.append(systemLine);
+      this.notifyListeners(record, systemLine);
 
       record.process = null;
       record.state.status = "error";
@@ -273,10 +315,17 @@ export class ServerRuntimeManager {
     });
 
     child.once("exit", (code, signal) => {
-      const record = this.ensureRecord(serverId);
       if (record.process !== child) {
         return;
       }
+
+      const systemLine: TerminalLine = {
+        timestamp: this.now().toISOString(),
+        stream: "system",
+        text: `Process exited with code=${code}, signal=${signal}`,
+      };
+      record.terminalBuffer.append(systemLine);
+      this.notifyListeners(record, systemLine);
 
       record.process = null;
       record.state.pid = null;
@@ -295,6 +344,16 @@ export class ServerRuntimeManager {
         this.activeServerId = null;
       }
     });
+  }
+
+  private notifyListeners(record: RuntimeRecord, line: TerminalLine): void {
+    for (const listener of record.listeners) {
+      try {
+        listener(line);
+      } catch {
+        // Ignore listener errors
+      }
+    }
   }
 
   private waitForStartup(child: ChildProcessWithoutNullStreams): Promise<void> {
@@ -449,5 +508,75 @@ export class ServerRuntimeManager {
         resolve();
       });
     });
+  }
+
+  public subscribeTerminal(
+    serverId: string,
+    listener: (line: TerminalLine) => void,
+  ): TerminalLine[] {
+    const record = this.ensureRecord(serverId);
+    record.listeners.add(listener);
+    return record.terminalBuffer.getSnapshot();
+  }
+
+  public unsubscribeTerminal(
+    serverId: string,
+    listener: (line: TerminalLine) => void,
+  ): void {
+    const record = this.records.get(serverId);
+    if (record) {
+      record.listeners.delete(listener);
+    }
+  }
+
+  public getTerminalHistory(serverId: string): TerminalLine[] {
+    const record = this.ensureRecord(serverId);
+    return record.terminalBuffer.getSnapshot();
+  }
+
+  public async sendCommands(
+    serverId: string,
+    text: string,
+  ): Promise<{ successCount: number; errors: Array<{ line: number; reason: string }> }> {
+    const record = this.ensureRecord(serverId);
+
+    if (record.state.status !== "running") {
+      throw new AppError("SERVER_NOT_RUNNING", `Server is not running: ${serverId}`);
+    }
+
+    const child = record.process;
+    if (!child || !child.stdin || child.stdin.destroyed || !child.stdin.writable) {
+      throw new AppError("TERMINAL_NOT_WRITABLE", `Terminal is not writable: ${serverId}`);
+    }
+
+    const lines = text.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
+    const errors: Array<{ line: number; reason: string }> = [];
+    let successCount = 0;
+
+    for (let i = 0; i < lines.length; i += 1) {
+      const command = lines[i];
+      if (!command) {
+        continue;
+      }
+
+      try {
+        await this.writeToStdin(child.stdin, `${command}\n`);
+
+        const systemLine: TerminalLine = {
+          timestamp: this.now().toISOString(),
+          stream: "system",
+          text: `> ${command}`,
+        };
+        record.terminalBuffer.append(systemLine);
+        this.notifyListeners(record, systemLine);
+
+        successCount += 1;
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        errors.push({ line: i + 1, reason });
+      }
+    }
+
+    return { successCount, errors };
   }
 }
