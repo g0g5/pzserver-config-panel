@@ -245,6 +245,13 @@
 
 执行：步骤 1、2、5（仅配置 API 部分）。
 
+完成情况（2026-02-18）：
+
+- 状态：已完成。
+- 步骤 1（配置模型升级与迁移）已落地：新增 `src/config/servers-config.ts`，支持 `servers-config.json` 读写、从 `paths-config.json` 自动迁移、以及 `id/iniPath/startCommand` 等核心校验。
+- 步骤 2（类型与错误模型扩展）已落地：新增 `src/types/server.ts` 中的服务实例与运行态类型，`src/errors/app-error.ts` 已扩展 V2 相关错误码并补齐 HTTP 映射。
+- 步骤 5（仅配置 API 部分）已落地：新增 `GET/PUT /api/servers-config`，并将既有 `/api/config`、`/api/paths` 接入实例上下文与兼容逻辑。
+
 ### M2：运行时与单活控制
 
 执行：步骤 3、4、5（运行控制 API）。

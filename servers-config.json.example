@@ -1,0 +1,14 @@
+{
+  "workshopPath": "/home/steam/Steam/steamapps/workshop/content/108600",
+  "stopGraceTimeoutMs": 45000,
+  "forceKillTimeoutMs": 10000,
+  "servers": [
+    {
+      "id": "servertest",
+      "name": "主服",
+      "iniPath": "/home/steam/Zomboid/Server/servertest.ini",
+      "startCommand": "/home/steam/pz/start-servertest.sh",
+      "stopCommands": ["save", "quit"]
+    }
+  ]
+}

@@ -1,119 +1,151 @@
 import express from "express";
 import { readConfig, saveConfig } from "../config/service.js";
 import { AppError, toErrorResponse } from "../errors/app-error.js";
-import { readFile, writeFile, stat } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { stat } from "node:fs/promises";
 import { parseWorkshopItems } from "../config/workshop-parser.js";
 import { relative, resolve } from "node:path";
 import type { WorkshopItem } from "../types/config.js";
+import {
+  applyLegacyPathsConfig,
+  getServerInstance,
+  loadServersConfig,
+  saveServersConfig,
+  toLegacyPathsConfig,
+} from "../config/servers-config.js";
+import type { LegacyPathsConfig } from "../config/servers-config.js";
+import type { ServerInstance } from "../types/server.js";
+import type { ServersConfig } from "../types/server.js";
 
-type PathsConfig = {
-  workshopPath: string;
-  iniFilePath: string;
-};
-
-const PATHS_CONFIG_FILE = "./paths-config.json";
-
-let pathsConfig: PathsConfig = {
-  workshopPath: "",
-  iniFilePath: ""
-};
-
-// 加载路径配置
-async function loadPathsConfig() {
-  try {
-    if (existsSync(PATHS_CONFIG_FILE)) {
-      const content = await readFile(PATHS_CONFIG_FILE, "utf8");
-      pathsConfig = JSON.parse(content);
-    }
-  } catch (error) {
-    console.error("Failed to load paths config:", error);
+function sendRouteError(error: unknown, res: express.Response): void {
+  if (error instanceof AppError) {
+    res.status(error.status).json(toErrorResponse(error));
+    return;
   }
+
+  const message = error instanceof Error ? error.message : String(error);
+  res.status(500).json({ error: { code: "INTERNAL_ERROR", message } });
 }
 
-// 保存路径配置
-async function savePathsConfig() {
-  try {
-    await writeFile(PATHS_CONFIG_FILE, JSON.stringify(pathsConfig, null, 2));
-  } catch (error) {
-    console.error("Failed to save paths config:", error);
+function getServerIdQuery(req: express.Request): string | undefined {
+  const value = req.query.serverId;
+  if (value === undefined) {
+    return undefined;
   }
+
+  if (typeof value !== "string") {
+    throw new AppError("BAD_REQUEST", "serverId query parameter must be a string");
+  }
+
+  const trimmed = value.trim();
+  return trimmed || undefined;
 }
 
-// 初始化时加载路径配置
-loadPathsConfig().catch(console.error);
+function resolveConfigServer(
+  config: ServersConfig,
+  req: express.Request,
+): ServerInstance {
+  const serverId = getServerIdQuery(req);
+  const server = getServerInstance(config, serverId);
+
+  if (!serverId && !server) {
+    throw new AppError("BAD_REQUEST", "No server instance configured");
+  }
+
+  if (serverId && !server) {
+    throw new AppError("NOT_FOUND", `Server instance not found: ${serverId}`);
+  }
+
+  if (!server) {
+    throw new AppError("BAD_REQUEST", "No server instance configured");
+  }
+
+  return server;
+}
+
+function validateLegacyPathsPayload(body: unknown): LegacyPathsConfig {
+  if (!body || typeof body !== "object") {
+    throw new AppError("BAD_REQUEST", "Invalid paths configuration");
+  }
+
+  const raw = body as { workshopPath?: unknown; iniFilePath?: unknown };
+  if (typeof raw.workshopPath !== "string" || typeof raw.iniFilePath !== "string") {
+    throw new AppError("BAD_REQUEST", "Invalid paths configuration");
+  }
+
+  return {
+    workshopPath: raw.workshopPath,
+    iniFilePath: raw.iniFilePath,
+  };
+}
+
+async function buildWorkshopItems(
+  workshopPath: string,
+  configItems: Array<{ key: string; value: string }>,
+): Promise<WorkshopItem[]> {
+  const workshopItemsItem = configItems.find((item) => item.key === "WorkshopItems");
+  if (!workshopItemsItem || !workshopItemsItem.value) {
+    return [];
+  }
+
+  const itemIds = workshopItemsItem.value
+    .split(";")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+
+  if (itemIds.length === 0) {
+    return [];
+  }
+
+  if (!workshopPath) {
+    return itemIds.map((id) => ({
+      id,
+      isDownloaded: false,
+      subMods: [],
+    }));
+  }
+
+  return parseWorkshopItems(workshopPath, itemIds);
+}
 
 export function createConfigRouter(configPath?: string): express.Router {
   const router = express.Router();
 
-  // 如果iniFilePath尚未设置，且提供了configPath，则使用命令行参数传递的configPath
-  if (!pathsConfig.iniFilePath && configPath) {
-    pathsConfig.iniFilePath = configPath;
-    // 保存到文件
-    savePathsConfig().catch(console.error);
-  }
-
-  router.get("/config", async (_req, res) => {
+  router.get("/config", async (req, res) => {
     try {
-      // 使用pathsConfig.iniFilePath或configPath
-      const actualConfigPath = pathsConfig.iniFilePath || configPath;
-      if (!actualConfigPath) {
-        throw new AppError("BAD_REQUEST", "No config path provided and no saved path found");
-      }
-      
-      const data = await readConfig(actualConfigPath);
-      
-      let workshopItems: WorkshopItem[] = [];
-      const workshopItemsItem = data.items.find((item) => item.key === "WorkshopItems");
-      
-      if (workshopItemsItem && workshopItemsItem.value) {
-        const itemIds = workshopItemsItem.value.split(";").map((s) => s.trim()).filter((s) => s);
-        
-        if (pathsConfig.workshopPath && itemIds.length > 0) {
-          workshopItems = await parseWorkshopItems(pathsConfig.workshopPath, itemIds);
-        } else {
-          workshopItems = itemIds.map((id) => ({
-            id,
-            isDownloaded: false,
-            subMods: [],
-          }));
-        }
-      }
-      
-      res.json({ ...data, workshopItems });
+      const serversConfig = await loadServersConfig({ cliConfigPath: configPath });
+      const targetServer = resolveConfigServer(serversConfig, req);
+      const data = await readConfig(targetServer.iniPath);
+      const workshopItems = await buildWorkshopItems(
+        serversConfig.workshopPath,
+        data.items,
+      );
+
+      res.json({
+        ...data,
+        serverId: targetServer.id,
+        workshopItems,
+      });
     } catch (error) {
-      if (error instanceof AppError) {
-        res.status(error.status).json(toErrorResponse(error));
-      } else {
-        const message = error instanceof Error ? error.message : String(error);
-        res.status(500).json({ error: { code: "INTERNAL_ERROR", message } });
-      }
+      sendRouteError(error, res);
     }
   });
 
   router.put("/config", async (req, res) => {
     try {
-      // 使用pathsConfig.iniFilePath或configPath
-      const actualConfigPath = pathsConfig.iniFilePath || configPath;
-      if (!actualConfigPath) {
-        throw new AppError("BAD_REQUEST", "No config path provided and no saved path found");
-      }
-      
-      const data = await saveConfig(actualConfigPath, req.body);
-      res.json(data);
+      const serversConfig = await loadServersConfig({ cliConfigPath: configPath });
+      const targetServer = resolveConfigServer(serversConfig, req);
+      const data = await saveConfig(targetServer.iniPath, req.body);
+      res.json({ ...data, serverId: targetServer.id });
     } catch (error) {
-      if (error instanceof AppError) {
-        res.status(error.status).json(toErrorResponse(error));
-      } else {
-        const message = error instanceof Error ? error.message : String(error);
-        res.status(500).json({ error: { code: "INTERNAL_ERROR", message } });
-      }
+      sendRouteError(error, res);
     }
   });
 
   router.get("/workshop-poster", async (req, res) => {
     try {
-      if (!pathsConfig.workshopPath) {
+      const serversConfig = await loadServersConfig({ cliConfigPath: configPath });
+
+      if (!serversConfig.workshopPath) {
         throw new AppError("BAD_REQUEST", "Workshop path is not configured");
       }
 
@@ -124,7 +156,7 @@ export function createConfigRouter(configPath?: string): express.Router {
         throw new AppError("BAD_REQUEST", "rel parameter is required");
       }
 
-      const rootAbs = resolve(pathsConfig.workshopPath);
+      const rootAbs = resolve(serversConfig.workshopPath);
       const candidateAbs = rel ? resolve(rootAbs, rel) : resolve(legacyPath);
 
       const relToRoot = relative(rootAbs, candidateAbs).replace(/\\/g, "/");
@@ -144,52 +176,33 @@ export function createConfigRouter(configPath?: string): express.Router {
 
       res.sendFile(candidateAbs);
     } catch (error) {
-      if (error instanceof AppError) {
-        res.status(error.status).json(toErrorResponse(error));
-      } else {
-        const message = error instanceof Error ? error.message : String(error);
-        res.status(500).json({ error: { code: "INTERNAL_ERROR", message } });
-      }
+      sendRouteError(error, res);
     }
   });
 
-  router.get("/paths", async (_req, res) => {
+  router.get("/paths", async (req, res) => {
     try {
-      res.json(pathsConfig);
+      const config = await loadServersConfig({ cliConfigPath: configPath });
+      const serverId = getServerIdQuery(req);
+      res.json(toLegacyPathsConfig(config, serverId));
     } catch (error) {
-      if (error instanceof AppError) {
-        res.status(error.status).json(toErrorResponse(error));
-      } else {
-        const message = error instanceof Error ? error.message : String(error);
-        res.status(500).json({ error: { code: "INTERNAL_ERROR", message } });
-      }
+      sendRouteError(error, res);
     }
   });
 
   router.put("/paths", async (req, res) => {
     try {
-      const { workshopPath, iniFilePath } = req.body;
-      
-      if (typeof workshopPath !== "string" || typeof iniFilePath !== "string") {
-        throw new AppError("BAD_REQUEST", "Invalid paths configuration");
-      }
-      
-      pathsConfig = {
-        workshopPath,
-        iniFilePath
-      };
-      
-      // 持久化保存路径配置
-      await savePathsConfig();
-      
-      res.json({ ok: true, paths: pathsConfig });
+      const payload = validateLegacyPathsPayload(req.body);
+      const currentConfig = await loadServersConfig({ cliConfigPath: configPath });
+      const nextConfig = applyLegacyPathsConfig(currentConfig, payload);
+      const savedConfig = await saveServersConfig(nextConfig);
+
+      res.json({
+        ok: true,
+        paths: toLegacyPathsConfig(savedConfig),
+      });
     } catch (error) {
-      if (error instanceof AppError) {
-        res.status(error.status).json(toErrorResponse(error));
-      } else {
-        const message = error instanceof Error ? error.message : String(error);
-        res.status(500).json({ error: { code: "INTERNAL_ERROR", message } });
-      }
+      sendRouteError(error, res);
     }
   });
 

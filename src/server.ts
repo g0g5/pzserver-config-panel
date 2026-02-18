@@ -1,5 +1,9 @@
 import express from "express";
-import { createHealthRouter, createConfigRouter } from "./routes/index.js";
+import {
+  createHealthRouter,
+  createConfigRouter,
+  createServersConfigRouter,
+} from "./routes/index.js";
 import { errorHandler } from "./middleware/error-handler.js";
 
 type StartupOptions = {
@@ -79,6 +83,7 @@ app.use(express.json());
 
 app.use("/api", createHealthRouter());
 app.use("/api", createConfigRouter(startupOptions.configPath || ""));
+app.use("/api", createServersConfigRouter(startupOptions.configPath || ""));
 
 app.use(errorHandler);
 
