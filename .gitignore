@@ -3,3 +3,4 @@ dist/
 *.log
 test_configs/
 paths-config.json
+servers-config.json1
