@@ -2,28 +2,35 @@
 
 ## Environment
 
-### Working Environment
-- Windows 11 25H2 (x64)
+### Runtime Requirements
 - Node.js >= 18
-- Working directory: D:/Workspace/APP/pzserver-config-panel
+- Primary deployment target is Linux game servers
 
-### Path Rules
-- Use forward slashes (/) as path separators in all file paths
-- Relative paths are relative to the workspace root
-- Case-insensitive file system
+### Access Model
+- Backend listens on localhost (`127.0.0.1`) and is intended to be accessed via SSH tunnel
 
 ## Build/Lint/Test Commands
 
 ### Development
 - `npm run dev` - Start development server with tsx
+- `npm run dev -- [--config /path/to/server.ini]` - Start dev server with optional ini path
+
+### Production
 - `npm run build` - Build TypeScript to dist/ using tsc
 - `npm start` - Run compiled server from dist/server.js
+- `npm start -- [--config /path/to/server.ini] [--port 3000]` - Start server with optional ini path and port
 
 ### Testing
 - `npm test` - Run all tests with Vitest
 - `npm test -- <test-file>` - Run specific test file (e.g., `npm test -- tests/service.test.ts`)
 - `npm test -- -t <pattern>` - Run tests matching name pattern (e.g., `npm test -- -t "should save"`)
 - `npm test -- run` - Run tests once without watch mode
+
+### Runtime Behavior
+- Server listens on `127.0.0.1` only (use SSH tunnel for remote access)
+- Static frontend files are served from `public/`
+- Path settings are persisted in `./paths-config.json`
+- Config path resolution order: saved `iniFilePath` first, then CLI `--config`
 
 ## Code Style Guidelines
 
@@ -50,8 +57,8 @@
 - Use `type` aliases for simple types and unions
 - Use `interface` for object shapes with methods
 - Use `as any` sparingly, only in test code
-- Export types from dedicated types/ directory
-- Use generic types for utility methods (map, filter, etc.)
+- Keep shared DTO and domain types in `src/types/`
+- Use generic types for utility methods where helpful
 
 ### Naming Conventions
 - PascalCase: Classes, type definitions, enum values
@@ -64,26 +71,26 @@
 - Use custom `AppError` class from `src/errors/app-error.ts`
 - Error codes: BAD_REQUEST, NOT_FOUND, FILE_LOCKED, IO_ERROR, ENCODING_UNSUPPORTED
 - Throw `AppError` with code and message: `throw new AppError("BAD_REQUEST", "message")`
-- Catch `AppError` in route handlers and return appropriate HTTP status
-- Map errors using `toErrorResponse()` helper
+- Catch `AppError` in route handlers and return status + JSON with `toErrorResponse()`
+- For unexpected errors in routes, return `{ error: { code: "INTERNAL_ERROR", message } }` with status 500
 
 ### File Organization
 - `src/server.ts` - Application entry point and CLI argument parsing
-- `src/routes/` - Express route handlers
+- `src/routes/` - Express route handlers (`health`, `config`, `paths`, `workshop-poster`)
 - `src/middleware/` - Express middleware
-- `src/config/` - Configuration management logic
+- `src/config/` - Configuration logic (encoding, parse, serialize, lock, workshop parsing)
+- `src/rules/` - Built-in key metadata mappings (zh-CN labels/descriptions)
 - `src/types/` - TypeScript type definitions
 - `src/errors/` - Custom error classes
-- `tests/` - Test files co-located with implementation
+- `public/` - Static frontend assets
+- `tests/` - Vitest test files
 
 ### Code Style
 - Use `const` for immutable values, `let` for mutable
 - Arrow functions for callbacks and short functions
-- Prefer functional programming over imperative loops
-- Early returns and guard clauses
-- No code comments unless explicitly requested
-- Minimal code, maximum clarity
-- Separate concerns: functions should do one thing
+- Prefer early returns and guard clauses
+- Avoid comments unless they clarify non-obvious behavior
+- Keep functions focused on one responsibility
 
 ### Testing
 - Framework: Vitest with node environment
@@ -91,20 +98,24 @@
 - Setup/teardown with `beforeEach`/`afterEach`
 - Test structure: arrange, act, assert
 - Use `expect` for assertions
-- Test file naming: `<module>.test.ts` in tests/ directory
+- Test file naming: `<module>.test.ts` in `tests/`
 - Validate both success and error paths
-- Test edge cases and boundary conditions
 
 ### HTTP Routes
 - Use Express Router pattern with factory functions
-- Route handlers catch errors and respond appropriately
 - Use async/await for asynchronous operations
 - Return JSON responses with appropriate HTTP status codes
-- Use AppError for expected errors, generic Error for unexpected
+- Use `AppError` for expected errors, generic `Error` for unexpected failures
+- Keep route contracts aligned with current API:
+  - `GET /api/health`
+  - `GET /api/config`, `PUT /api/config`
+  - `GET /api/paths`, `PUT /api/paths`
+  - `GET /api/workshop-poster?rel=<relative-path>`
 
 ### CLI Arguments
 - Parse CLI args with manual parsing in `src/server.ts`
-- Required: `--config <path>`
+- Optional: `--config <path>`
 - Optional: `--port <number>` (default: 3000)
+- Reject unknown arguments and missing option values
 - Validate all arguments on startup
 - Print usage on error and exit with code 1
