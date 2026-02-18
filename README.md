@@ -33,7 +33,7 @@ npm install
 1. 复制示例文件并创建服务端实际读取的配置文件：
 
 ```bash
-cp path-config.json.example paths-config.json
+cp paths-config.json.example paths-config.json
 ```
 
 2. 编辑 `paths-config.json`，按你的服务器实际目录填写：
@@ -41,7 +41,7 @@ cp path-config.json.example paths-config.json
 - `iniFilePath`：服务器 `.ini` 配置文件完整路径
 - `workshopPath`：Steam Workshop 的 `108600` 目录完整路径
 
-> 说明：示例文件名为 `path-config.json.example`，服务端实际读取的是 `paths-config.json`（带 `s`）。
+> 说明：示例文件名为 `paths-config.json.example`，服务端实际读取的是 `paths-config.json`。
 
 ## 构建
 
