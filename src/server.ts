@@ -88,11 +88,11 @@ app.use(express.json());
 
 app.use("/api", createHealthRouter());
 app.use("/api", createConfigRouter(startupOptions.configPath || ""));
-app.use("/api", createServersConfigRouter(startupOptions.configPath || ""));
 app.use(
   "/api",
   createServersRuntimeRouter(runtimeManager, startupOptions.configPath || ""),
 );
+app.use("/api", createServersConfigRouter(startupOptions.configPath || ""));
 app.use(
   "/api",
   createTerminalRouter(runtimeManager, startupOptions.configPath || ""),
