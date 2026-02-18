@@ -83,6 +83,11 @@ try {
 const app = express();
 const runtimeManager = new ServerRuntimeManager();
 
+// 根路径重定向到实例选择页面
+app.get("/", (_req, res) => {
+  res.redirect("/instance-select.html");
+});
+
 app.use(express.static("public"));
 app.use(express.json());
 
