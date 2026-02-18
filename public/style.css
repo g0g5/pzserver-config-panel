@@ -196,6 +196,18 @@ main {
   display: block;
 }
 
+/* 控制台标签页特殊布局 */
+#console-tab {
+  display: none;
+  flex-direction: column;
+  height: calc(100vh - 180px);
+  min-height: 500px;
+}
+
+#console-tab.active {
+  display: flex;
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -340,6 +352,7 @@ main {
   border-radius: 8px;
   padding: 1.5rem;
   flex-shrink: 0;
+  margin-bottom: 1rem;
 }
 
 .control-header {
@@ -435,7 +448,7 @@ main {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  min-height: 300px;
+  min-height: 0;
 }
 
 .terminal-header {
@@ -496,6 +509,8 @@ main {
   line-height: 1.5;
   overflow-y: auto;
   color: #e0e0e0;
+  min-height: 0;
+  max-height: 100%;
 }
 
 .terminal-line {
