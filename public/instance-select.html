@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="style.css">
   <style>
     body {
-      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      background-color: #1a1a1a;
       min-height: 100vh;
     }
 
@@ -23,7 +23,7 @@
       align-items: center;
       margin-bottom: 40px;
       padding-bottom: 20px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      border-bottom: 1px solid #404040;
     }
 
     .instance-select-header h1 {
@@ -34,15 +34,15 @@
     }
 
     .instance-select-header h1 span {
-      color: #4a9eff;
+      color: #4caf50;
     }
 
     .global-settings-btn {
-      background: rgba(255, 255, 255, 0.1);
-      border: 1px solid rgba(255, 255, 255, 0.2);
+      background-color: #333;
+      border: 1px solid #404040;
       color: #fff;
       padding: 10px 20px;
-      border-radius: 8px;
+      border-radius: 4px;
       cursor: pointer;
       transition: all 0.3s;
       display: flex;
@@ -51,7 +51,7 @@
     }
 
     .global-settings-btn:hover {
-      background: rgba(255, 255, 255, 0.2);
+      background-color: #444;
     }
 
     .servers-grid {
@@ -62,9 +62,9 @@
     }
 
     .server-card {
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 16px;
+      background-color: #252525;
+      border: 1px solid #404040;
+      border-radius: 8px;
       padding: 24px;
       cursor: pointer;
       transition: all 0.3s ease;
@@ -79,7 +79,7 @@
       left: 0;
       right: 0;
       height: 4px;
-      background: linear-gradient(90deg, #4a9eff, #00d4aa);
+      background-color: #4caf50;
       opacity: 0;
       transition: opacity 0.3s;
     }
@@ -89,18 +89,18 @@
     }
 
     .server-card:hover {
-      background: rgba(255, 255, 255, 0.08);
+      background-color: #2a2a2a;
       transform: translateY(-4px);
       box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
     }
 
     .server-card.running {
-      border-color: rgba(74, 158, 255, 0.3);
+      border-color: #4caf50;
     }
 
     .server-card.running::before {
       opacity: 1;
-      background: linear-gradient(90deg, #00d4aa, #4a9eff);
+      background-color: #4caf50;
     }
 
     .server-card-header {
@@ -122,15 +122,35 @@
       align-items: center;
       gap: 6px;
       padding: 4px 12px;
-      border-radius: 20px;
+      border-radius: 4px;
       font-size: 12px;
       font-weight: 500;
       text-transform: uppercase;
     }
 
     .server-card-status.stopped {
-      background: rgba(255, 255, 255, 0.1);
-      color: #888;
+      background-color: #666;
+      color: #e0e0e0;
+    }
+
+    .server-card-status.running {
+      background-color: #4caf50;
+      color: white;
+    }
+
+    .server-card-status.starting {
+      background-color: #ff9800;
+      color: white;
+    }
+
+    .server-card-status.stopping {
+      background-color: #f44336;
+      color: white;
+    }
+
+    .server-card-status.error {
+      background-color: #9c27b0;
+      color: white;
     }
 
     .server-card-status.running {
@@ -161,7 +181,7 @@
     }
 
     .server-card-path {
-      color: rgba(255, 255, 255, 0.5);
+      color: #a0a0a0;
       font-size: 13px;
       font-family: monospace;
       margin-bottom: 20px;
@@ -177,7 +197,7 @@
       flex: 1;
       padding: 10px 16px;
       border: none;
-      border-radius: 8px;
+      border-radius: 4px;
       font-size: 14px;
       font-weight: 500;
       cursor: pointer;
@@ -185,22 +205,21 @@
     }
 
     .server-card-btn.primary {
-      background: linear-gradient(135deg, #4a9eff, #00d4aa);
-      color: #fff;
+      background-color: #4caf50;
+      color: white;
     }
 
     .server-card-btn.primary:hover {
-      transform: scale(1.02);
-      box-shadow: 0 4px 12px rgba(74, 158, 255, 0.4);
+      background-color: #43a047;
     }
 
     .server-card-btn.secondary {
-      background: rgba(255, 255, 255, 0.1);
-      color: #fff;
+      background-color: #333;
+      color: white;
     }
 
     .server-card-btn.secondary:hover {
-      background: rgba(255, 255, 255, 0.2);
+      background-color: #444;
     }
 
     .server-card-btn:disabled {
@@ -215,10 +234,10 @@
 
     .add-server-btn {
       background: transparent;
-      border: 2px dashed rgba(255, 255, 255, 0.3);
-      color: rgba(255, 255, 255, 0.6);
+      border: 2px dashed #404040;
+      color: #a0a0a0;
       padding: 40px 60px;
-      border-radius: 16px;
+      border-radius: 8px;
       font-size: 16px;
       cursor: pointer;
       transition: all 0.3s;
@@ -228,9 +247,9 @@
     }
 
     .add-server-btn:hover {
-      border-color: #4a9eff;
-      color: #4a9eff;
-      background: rgba(74, 158, 255, 0.05);
+      border-color: #4caf50;
+      color: #4caf50;
+      background: #252525;
     }
 
     .add-server-btn .icon {
@@ -240,7 +259,7 @@
     .empty-state {
       text-align: center;
       padding: 60px 20px;
-      color: rgba(255, 255, 255, 0.5);
+      color: #a0a0a0;
     }
 
     .empty-state-icon {
@@ -275,9 +294,9 @@
     }
 
     .dialog-content {
-      background: #1a1a2e;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 16px;
+      background-color: #252525;
+      border: 1px solid #404040;
+      border-radius: 8px;
       width: 100%;
       max-width: 500px;
       max-height: 90vh;
@@ -289,7 +308,7 @@
       justify-content: space-between;
       align-items: center;
       padding: 24px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      border-bottom: 1px solid #404040;
     }
 
     .dialog-header h3 {
@@ -301,7 +320,7 @@
     .dialog-close {
       background: none;
       border: none;
-      color: rgba(255, 255, 255, 0.5);
+      color: #a0a0a0;
       font-size: 24px;
       cursor: pointer;
       padding: 0;
@@ -310,12 +329,12 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      border-radius: 8px;
+      border-radius: 4px;
       transition: all 0.3s;
     }
 
     .dialog-close:hover {
-      background: rgba(255, 255, 255, 0.1);
+      background-color: rgba(255, 255, 255, 0.1);
       color: #fff;
     }
 
@@ -329,7 +348,7 @@
 
     .dialog-input-group label {
       display: block;
-      color: rgba(255, 255, 255, 0.7);
+      color: #a0a0a0;
       font-size: 14px;
       margin-bottom: 8px;
     }
@@ -337,30 +356,31 @@
     .dialog-input {
       width: 100%;
       padding: 12px 16px;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 8px;
-      color: #fff;
+      background-color: #1a1a1a;
+      border: 1px solid #404040;
+      border-radius: 4px;
+      color: #e0e0e0;
       font-size: 15px;
       transition: all 0.3s;
     }
 
     .dialog-input:focus {
       outline: none;
-      border-color: #4a9eff;
+      border-color: #4caf50;
+      box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
     }
 
     .dialog-input::placeholder {
-      color: rgba(255, 255, 255, 0.3);
+      color: #666;
     }
 
     .dialog-textarea {
       width: 100%;
       padding: 12px 16px;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 8px;
-      color: #fff;
+      background-color: #1a1a1a;
+      border: 1px solid #404040;
+      border-radius: 4px;
+      color: #e0e0e0;
       font-size: 15px;
       resize: vertical;
       min-height: 80px;
@@ -369,7 +389,8 @@
 
     .dialog-textarea:focus {
       outline: none;
-      border-color: #4a9eff;
+      border-color: #4caf50;
+      box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
     }
 
     .dialog-footer {
@@ -377,13 +398,14 @@
       justify-content: flex-end;
       gap: 12px;
       padding: 24px;
-      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      border-top: 1px solid #404040;
+      background-color: #2a2a2a;
     }
 
     .dialog-button {
       padding: 10px 24px;
       border: none;
-      border-radius: 8px;
+      border-radius: 4px;
       font-size: 14px;
       font-weight: 500;
       cursor: pointer;
@@ -391,34 +413,34 @@
     }
 
     .dialog-button.cancel {
-      background: rgba(255, 255, 255, 0.1);
-      color: #fff;
+      background-color: #666;
+      color: white;
     }
 
     .dialog-button.cancel:hover {
-      background: rgba(255, 255, 255, 0.2);
+      background-color: #777;
     }
 
     .dialog-button.confirm {
-      background: linear-gradient(135deg, #4a9eff, #00d4aa);
-      color: #fff;
+      background-color: #4caf50;
+      color: white;
     }
 
     .dialog-button.confirm:hover {
-      transform: scale(1.02);
+      background-color: #43a047;
     }
 
     .dialog-button.delete {
-      background: rgba(244, 67, 54, 0.2);
-      color: #f44336;
+      background-color: #f44336;
+      color: white;
     }
 
     .dialog-button.delete:hover {
-      background: rgba(244, 67, 54, 0.3);
+      background-color: #d32f2f;
     }
 
     .dialog-hint {
-      color: rgba(255, 255, 255, 0.4);
+      color: #a0a0a0;
       font-size: 12px;
       margin-top: 4px;
     }
@@ -435,8 +457,8 @@
     }
 
     .toast {
-      padding: 16px 24px;
-      border-radius: 12px;
+      padding: 12px 20px;
+      border-radius: 6px;
       color: #fff;
       font-size: 14px;
       opacity: 0;
@@ -452,15 +474,15 @@
     }
 
     .toast.success {
-      background: linear-gradient(135deg, #00d4aa, #00b894);
+      background-color: #4caf50;
     }
 
     .toast.error {
-      background: linear-gradient(135deg, #f44336, #d32f2f);
+      background-color: #f44336;
     }
 
     .toast.info {
-      background: linear-gradient(135deg, #4a9eff, #2196f3);
+      background-color: #2196f3;
     }
 
     .loading-overlay {
@@ -483,8 +505,8 @@
     .loading-spinner {
       width: 50px;
       height: 50px;
-      border: 3px solid rgba(255, 255, 255, 0.1);
-      border-top-color: #4a9eff;
+      border: 3px solid #333;
+      border-top-color: #4caf50;
       border-radius: 50%;
       animation: spin 1s linear infinite;
     }
