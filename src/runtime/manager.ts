@@ -12,8 +12,10 @@ import type {
   ServerRuntimeStatus,
   ServersRuntimeSnapshot,
   TerminalLine,
+  ServerGlobalConfig,
 } from "../types/server.js";
 import { TerminalRingBuffer } from "./terminal-buffer.js";
+import { buildStartCommand } from "../config/servers-config.js";
 
 type RuntimeRecord = {
   state: ServerRuntimeState;
@@ -126,7 +128,10 @@ export class ServerRuntimeManager {
     };
   }
 
-  public async startServer(server: ServerInstance): Promise<ServerRuntimeState> {
+  public async startServer(
+    server: ServerInstance,
+    globalConfig: ServerGlobalConfig,
+  ): Promise<ServerRuntimeState> {
     const record = this.ensureRecord(server.id);
 
     if (isActiveStatus(record.state.status)) {
@@ -140,9 +145,11 @@ export class ServerRuntimeManager {
     record.state.startedAt = null;
     this.activeServerId = server.id;
 
+    const startCommand = buildStartCommand(globalConfig, server);
+
     let child: ChildProcessWithoutNullStreams;
     try {
-      child = this.spawnProcess(server.startCommand, {
+      child = this.spawnProcess(startCommand, {
         shell: true,
         detached: true,
         stdio: ["pipe", "pipe", "pipe"],

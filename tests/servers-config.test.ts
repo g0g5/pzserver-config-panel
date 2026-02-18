@@ -42,19 +42,22 @@ describe("servers-config", () => {
       legacyPathsConfigPath,
     });
 
-    expect(config.workshopPath).toBe(
+    expect(config.global.workshopPath).toBe(
       "/home/steam/Steam/steamapps/workshop/content/108600",
     );
+    expect(config.global.startScriptPath).toBe("./start-server.sh");
     expect(config.servers).toHaveLength(1);
     expect(config.servers[0]).toMatchObject({
       id: "servertest",
       name: "servertest",
       iniPath: "/home/steam/Zomboid/Server/servertest.ini",
+      startArgs: ["-servername", "servertest"],
       stopCommands: ["save", "quit"],
     });
 
     const persisted = JSON.parse(await readFile(serversConfigPath, "utf8")) as ServersConfig;
     expect(persisted.servers).toHaveLength(1);
+    expect(persisted.global).toBeDefined();
   });
 
   it("should initialize from CLI config path when no config exists", async () => {
@@ -68,64 +71,44 @@ describe("servers-config", () => {
     expect(config.servers[0]).toMatchObject({
       id: "server-main",
       iniPath: "/srv/pz/server-main.ini",
-      startCommand: "./start-server.sh",
+      startArgs: ["-servername", "server-main"],
       stopCommands: ["save", "quit"],
     });
+    expect(config.global.startScriptPath).toBe("./start-server.sh");
   });
 
   it("should reject duplicate server ids", async () => {
-    await expect(
-      saveServersConfig(
+    const validConfig: ServersConfig = {
+      global: {
+        workshopPath: "",
+        startScriptPath: "/start.sh",
+        stopGraceTimeoutMs: 45000,
+        forceKillTimeoutMs: 10000,
+      },
+      servers: [
         {
-          workshopPath: "",
-          stopGraceTimeoutMs: 45000,
-          forceKillTimeoutMs: 10000,
-          servers: [
-            {
-              id: "same",
-              name: "A",
-              iniPath: "/a/test.ini",
-              startCommand: "./start-a.sh",
-              stopCommands: ["save", "quit"],
-            },
-            {
-              id: "same",
-              name: "B",
-              iniPath: "/b/test.ini",
-              startCommand: "./start-b.sh",
-              stopCommands: ["save", "quit"],
-            },
-          ],
+          id: "same",
+          name: "A",
+          iniPath: "/a/test.ini",
+          startArgs: ["-servername", "a"],
+          stopCommands: ["save", "quit"],
         },
-        { serversConfigPath },
-      ),
+        {
+          id: "same",
+          name: "B",
+          iniPath: "/b/test.ini",
+          startArgs: ["-servername", "b"],
+          stopCommands: ["save", "quit"],
+        },
+      ],
+    };
+
+    await expect(
+      saveServersConfig(validConfig, { serversConfigPath }),
     ).rejects.toThrow(AppError);
 
     await expect(
-      saveServersConfig(
-        {
-          workshopPath: "",
-          stopGraceTimeoutMs: 45000,
-          forceKillTimeoutMs: 10000,
-          servers: [
-            {
-              id: "same",
-              name: "A",
-              iniPath: "/a/test.ini",
-              startCommand: "./start-a.sh",
-              stopCommands: ["save", "quit"],
-            },
-            {
-              id: "same",
-              name: "B",
-              iniPath: "/b/test.ini",
-              startCommand: "./start-b.sh",
-              stopCommands: ["save", "quit"],
-            },
-          ],
-        },
-        { serversConfigPath },
-      ),
+      saveServersConfig(validConfig, { serversConfigPath }),
     ).rejects.toMatchObject({
       code: "BAD_REQUEST",
       status: 400,
@@ -136,15 +119,18 @@ describe("servers-config", () => {
     await expect(
       saveServersConfig(
         {
-          workshopPath: "",
-          stopGraceTimeoutMs: 45000,
-          forceKillTimeoutMs: 10000,
+          global: {
+            workshopPath: "",
+            startScriptPath: "/start.sh",
+            stopGraceTimeoutMs: 45000,
+            forceKillTimeoutMs: 10000,
+          },
           servers: [
             {
               id: "main",
               name: "Main",
               iniPath: "./relative.ini",
-              startCommand: "./start.sh",
+              startArgs: ["-servername", "main"],
               stopCommands: ["save", "quit"],
             },
           ],
@@ -157,42 +143,47 @@ describe("servers-config", () => {
     });
   });
 
-  it("should reject empty startCommand", async () => {
-    await expect(
-      saveServersConfig(
+  it("should save with startArgs instead of startCommand", async () => {
+    const config: ServersConfig = {
+      global: {
+        workshopPath: "/workshop",
+        startScriptPath: "/start.sh",
+        stopGraceTimeoutMs: 45000,
+        forceKillTimeoutMs: 10000,
+      },
+      servers: [
         {
-          workshopPath: "",
-          stopGraceTimeoutMs: 45000,
-          forceKillTimeoutMs: 10000,
-          servers: [
-            {
-              id: "main",
-              name: "Main",
-              iniPath: "/home/steam/Zomboid/Server/main.ini",
-              startCommand: "   ",
-              stopCommands: ["save", "quit"],
-            },
-          ],
+          id: "main",
+          name: "Main",
+          iniPath: "/home/steam/Zomboid/Server/main.ini",
+          startArgs: ["-servername", "main", "-debug"],
+          stopCommands: ["save", "quit"],
         },
-        { serversConfigPath },
-      ),
-    ).rejects.toMatchObject({
-      code: "BAD_REQUEST",
-      status: 400,
-    });
+      ],
+    };
+
+    const saved = await saveServersConfig(config, { serversConfigPath });
+    expect(saved.servers[0].startArgs).toEqual(["-servername", "main", "-debug"]);
+    
+    // 验证持久化文件
+    const persisted = JSON.parse(await readFile(serversConfigPath, "utf8")) as ServersConfig;
+    expect(persisted.servers[0].startArgs).toEqual(["-servername", "main", "-debug"]);
   });
 
   it("should support legacy /paths compatibility mapping", () => {
     const config: ServersConfig = {
-      workshopPath: "/workshop",
-      stopGraceTimeoutMs: 45000,
-      forceKillTimeoutMs: 10000,
+      global: {
+        workshopPath: "/workshop",
+        startScriptPath: "/start.sh",
+        stopGraceTimeoutMs: 45000,
+        forceKillTimeoutMs: 10000,
+      },
       servers: [
         {
           id: "a",
           name: "A",
           iniPath: "/srv/a.ini",
-          startCommand: "./start-a.sh",
+          startArgs: ["-servername", "a"],
           stopCommands: ["save", "quit"],
         },
       ],
@@ -203,7 +194,7 @@ describe("servers-config", () => {
       iniFilePath: "/srv/b.ini",
     });
 
-    expect(updated.workshopPath).toBe("/new-workshop");
+    expect(updated.global.workshopPath).toBe("/new-workshop");
     expect(updated.servers[0].iniPath).toBe("/srv/b.ini");
     expect(toLegacyPathsConfig(updated)).toEqual({
       workshopPath: "/new-workshop",

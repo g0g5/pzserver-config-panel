@@ -28,15 +28,18 @@ describe("V2 Regression Tests", () => {
   describe("Servers Config", () => {
     it("should save and load servers-config.json", async () => {
       const config: ServersConfig = {
-        workshopPath: "/path/to/workshop",
-        stopGraceTimeoutMs: 30000,
-        forceKillTimeoutMs: 10000,
+        global: {
+          workshopPath: "/path/to/workshop",
+          startScriptPath: "/path/to/start.sh",
+          stopGraceTimeoutMs: 30000,
+          forceKillTimeoutMs: 10000,
+        },
         servers: [
           {
             id: "server-1",
             name: "Test Server",
             iniPath: join(TEST_DIR, "server.ini"),
-            startCommand: "/path/to/start.sh",
+            startArgs: ["-servername", "server-1"],
             stopCommands: ["save", "quit"],
           },
         ],
@@ -45,20 +48,25 @@ describe("V2 Regression Tests", () => {
       await saveServersConfig(config, { serversConfigPath: join(TEST_DIR, "servers-config.json") });
       const loaded = await loadServersConfig({ serversConfigPath: join(TEST_DIR, "servers-config.json") });
 
-      expect(loaded.workshopPath).toBe(config.workshopPath);
+      expect(loaded.global.workshopPath).toBe(config.global.workshopPath);
+      expect(loaded.global.startScriptPath).toBe(config.global.startScriptPath);
       expect(loaded.servers).toHaveLength(1);
       expect(loaded.servers[0].id).toBe("server-1");
       expect(loaded.servers[0].name).toBe("Test Server");
+      expect(loaded.servers[0].startArgs).toEqual(["-servername", "server-1"]);
     });
 
     it("should validate server id uniqueness", async () => {
       const config: ServersConfig = {
-        workshopPath: "/path/to/workshop",
-        stopGraceTimeoutMs: 30000,
-        forceKillTimeoutMs: 10000,
+        global: {
+          workshopPath: "/path/to/workshop",
+          startScriptPath: "/start.sh",
+          stopGraceTimeoutMs: 30000,
+          forceKillTimeoutMs: 10000,
+        },
         servers: [
-          { id: "same-id", name: "Server 1", iniPath: "/a.ini", startCommand: "cmd", stopCommands: [] },
-          { id: "same-id", name: "Server 2", iniPath: "/b.ini", startCommand: "cmd", stopCommands: [] },
+          { id: "same-id", name: "Server 1", iniPath: "/a.ini", startArgs: ["-s", "a"], stopCommands: [] },
+          { id: "same-id", name: "Server 2", iniPath: "/b.ini", startArgs: ["-s", "b"], stopCommands: [] },
         ],
       };
 
@@ -67,28 +75,51 @@ describe("V2 Regression Tests", () => {
 
     it("should validate iniPath is absolute", async () => {
       const config: ServersConfig = {
-        workshopPath: "/path/to/workshop",
-        stopGraceTimeoutMs: 30000,
-        forceKillTimeoutMs: 10000,
+        global: {
+          workshopPath: "/path/to/workshop",
+          startScriptPath: "/start.sh",
+          stopGraceTimeoutMs: 30000,
+          forceKillTimeoutMs: 10000,
+        },
         servers: [
-          { id: "server-1", name: "Test", iniPath: "relative/path.ini", startCommand: "cmd", stopCommands: [] },
+          { id: "server-1", name: "Test", iniPath: "relative/path.ini", startArgs: [], stopCommands: [] },
         ],
       };
 
       await expect(saveServersConfig(config)).rejects.toThrow();
     });
 
-    it("should validate startCommand is not empty", async () => {
-      const config: ServersConfig = {
-        workshopPath: "/path/to/workshop",
-        stopGraceTimeoutMs: 30000,
-        forceKillTimeoutMs: 10000,
+    it("should validate startArgs as array", async () => {
+      const config = {
+        global: {
+          workshopPath: "/path/to/workshop",
+          startScriptPath: "/start.sh",
+          stopGraceTimeoutMs: 30000,
+          forceKillTimeoutMs: 10000,
+        },
         servers: [
-          { id: "server-1", name: "Test", iniPath: "/abs/path.ini", startCommand: "", stopCommands: [] },
+          { id: "server-1", name: "Test", iniPath: "/abs/path.ini", startArgs: "not-an-array", stopCommands: [] },
         ],
       };
 
-      await expect(saveServersConfig(config)).rejects.toThrow();
+      await expect(saveServersConfig(config as ServersConfig)).rejects.toThrow();
+    });
+
+    it("should use default startArgs when not provided", async () => {
+      const config = {
+        global: {
+          workshopPath: "/path/to/workshop",
+          startScriptPath: "/start.sh",
+          stopGraceTimeoutMs: 30000,
+          forceKillTimeoutMs: 10000,
+        },
+        servers: [
+          { id: "server-1", name: "Test", iniPath: "/home/user/server.ini", stopCommands: ["save", "quit"] },
+        ],
+      };
+
+      const saved = await saveServersConfig(config as ServersConfig);
+      expect(saved.servers[0].startArgs).toEqual(["-servername", "server"]);
     });
   });
 
@@ -147,7 +178,8 @@ describe("V2 Regression Tests", () => {
 
       const config = await loadServersConfig({ serversConfigPath: join(TEST_DIR, "servers-config.json"), legacyPathsConfigPath: join(TEST_DIR, "paths-config.json") });
 
-      expect(config.workshopPath).toBe(legacyConfig.workshopPath);
+      expect(config.global.workshopPath).toBe(legacyConfig.workshopPath);
+      expect(config.global.startScriptPath).toBe("./start-server.sh");
       expect(config.servers).toHaveLength(1);
       expect(config.servers[0].iniPath).toBe(legacyConfig.iniFilePath);
     });
@@ -160,15 +192,18 @@ describe("V2 Regression Tests", () => {
       await writeFile(join(TEST_DIR, "paths-config.json"), JSON.stringify(legacyConfig), "utf-8");
 
       const newConfig: ServersConfig = {
-        workshopPath: "/new/workshop",
-        stopGraceTimeoutMs: 30000,
-        forceKillTimeoutMs: 10000,
+        global: {
+          workshopPath: "/new/workshop",
+          startScriptPath: "/new/start.sh",
+          stopGraceTimeoutMs: 30000,
+          forceKillTimeoutMs: 10000,
+        },
         servers: [
           {
             id: "new-server",
             name: "New Server",
             iniPath: "/new/server.ini",
-            startCommand: "cmd",
+            startArgs: ["-servername", "new"],
             stopCommands: [],
           },
         ],
@@ -177,7 +212,7 @@ describe("V2 Regression Tests", () => {
 
       const config = await loadServersConfig({ serversConfigPath: join(TEST_DIR, "servers-config.json"), legacyPathsConfigPath: join(TEST_DIR, "paths-config.json") });
 
-      expect(config.workshopPath).toBe("/new/workshop");
+      expect(config.global.workshopPath).toBe("/new/workshop");
       expect(config.servers[0].id).toBe("new-server");
     });
   });
@@ -188,15 +223,18 @@ describe("V2 Regression Tests", () => {
       await writeFile(iniPath, "Public=true\n", "utf-8");
 
       const serversConfig: ServersConfig = {
-        workshopPath: "/workshop",
-        stopGraceTimeoutMs: 30000,
-        forceKillTimeoutMs: 10000,
+        global: {
+          workshopPath: "/workshop",
+          startScriptPath: "/start.sh",
+          stopGraceTimeoutMs: 30000,
+          forceKillTimeoutMs: 10000,
+        },
         servers: [
           {
             id: "test-server",
             name: "Test",
             iniPath,
-            startCommand: "cmd",
+            startArgs: ["-servername", "test"],
             stopCommands: [],
           },
         ],

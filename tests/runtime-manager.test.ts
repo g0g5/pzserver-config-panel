@@ -1,8 +1,15 @@
 import { describe, it, expect } from "vitest";
 import { ServerRuntimeManager } from "../src/runtime/manager.js";
-import type { ServerInstance } from "../src/types/server.js";
+import type { ServerInstance, ServerGlobalConfig } from "../src/types/server.js";
 
 const STOP_OPTIONS = {
+  stopGraceTimeoutMs: 100,
+  forceKillTimeoutMs: 500,
+};
+
+const DEFAULT_GLOBAL_CONFIG: ServerGlobalConfig = {
+  workshopPath: "/workshop",
+  startScriptPath: "node",
   stopGraceTimeoutMs: 100,
   forceKillTimeoutMs: 500,
 };
@@ -12,7 +19,7 @@ function createServer(overrides: Partial<ServerInstance>): ServerInstance {
     id: "server",
     name: "server",
     iniPath: "/tmp/server.ini",
-    startCommand: "node -e \"setInterval(() => {}, 1000)\"",
+    startArgs: ["-e", "setInterval(() => {}, 1000)"],
     stopCommands: ["save", "quit"],
     ...overrides,
   };
@@ -50,9 +57,9 @@ describe("ServerRuntimeManager", () => {
     const serverA = createServer({ id: "a", name: "A" });
     const serverB = createServer({ id: "b", name: "B" });
 
-    await manager.startServer(serverA);
+    await manager.startServer(serverA, DEFAULT_GLOBAL_CONFIG);
 
-    await expect(manager.startServer(serverB)).rejects.toMatchObject({
+    await expect(manager.startServer(serverB, DEFAULT_GLOBAL_CONFIG)).rejects.toMatchObject({
       code: "ANOTHER_SERVER_RUNNING",
       status: 409,
     });
@@ -68,9 +75,9 @@ describe("ServerRuntimeManager", () => {
     const manager = new ServerRuntimeManager({ startupProbeMs: 80 });
     const server = createServer({ id: "main", name: "Main" });
 
-    await manager.startServer(server);
+    await manager.startServer(server, DEFAULT_GLOBAL_CONFIG);
 
-    await expect(manager.startServer(server)).rejects.toMatchObject({
+    await expect(manager.startServer(server, DEFAULT_GLOBAL_CONFIG)).rejects.toMatchObject({
       code: "SERVER_ALREADY_RUNNING",
       status: 409,
     });
@@ -93,10 +100,10 @@ describe("ServerRuntimeManager", () => {
     const server = createServer({
       id: "failing",
       name: "Failing",
-      startCommand: "node -e \"process.exit(1)\"",
+      startArgs: ["-e", "process.exit(1)"],
     });
 
-    await expect(manager.startServer(server)).rejects.toMatchObject({
+    await expect(manager.startServer(server, DEFAULT_GLOBAL_CONFIG)).rejects.toMatchObject({
       code: "PROCESS_SPAWN_FAILED",
       status: 500,
     });
@@ -113,10 +120,10 @@ describe("ServerRuntimeManager", () => {
       const server = createServer({
         id: "echo",
         name: "Echo",
-        startCommand: "node -e \"console.log('hello world'); setInterval(() => {}, 1000)\"",
+        startArgs: ["-e", "console.log('hello world'); setInterval(() => {}, 1000)"],
       });
 
-      await manager.startServer(server);
+      await manager.startServer(server, DEFAULT_GLOBAL_CONFIG);
 
       await new Promise((resolve) => setTimeout(resolve, 200));
 
@@ -132,10 +139,10 @@ describe("ServerRuntimeManager", () => {
       const server = createServer({
         id: "stderr",
         name: "Stderr",
-        startCommand: "node -e \"console.error('error message'); setInterval(() => {}, 1000)\"",
+        startArgs: ["-e", "console.error('error message'); setInterval(() => {}, 1000)"],
       });
 
-      await manager.startServer(server);
+      await manager.startServer(server, DEFAULT_GLOBAL_CONFIG);
 
       await new Promise((resolve) => setTimeout(resolve, 200));
 
@@ -151,7 +158,7 @@ describe("ServerRuntimeManager", () => {
       const server = createServer({
         id: "notify",
         name: "Notify",
-        startCommand: "node -e \"console.log('test'); setInterval(() => {}, 1000)\"",
+        startArgs: ["-e", "console.log('test'); setInterval(() => {}, 1000)"],
       });
 
       const receivedLines: any[] = [];
@@ -160,7 +167,7 @@ describe("ServerRuntimeManager", () => {
       };
 
       manager.subscribeTerminal("notify", listener);
-      await manager.startServer(server);
+      await manager.startServer(server, DEFAULT_GLOBAL_CONFIG);
 
       await new Promise((resolve) => setTimeout(resolve, 200));
 
@@ -176,10 +183,10 @@ describe("ServerRuntimeManager", () => {
       const server = createServer({
         id: "commands",
         name: "Commands",
-        startCommand: "node -e \"const rl=require('readline').createInterface({input:process.stdin});rl.on('line',l=>console.log('ECHO:',l));setInterval(()=>{},1000)\"",
+        startArgs: ["-e", "const rl=require('readline').createInterface({input:process.stdin});rl.on('line',l=>console.log('ECHO:',l));setInterval(()=>{},1000)"],
       });
 
-      await manager.startServer(server);
+      await manager.startServer(server, DEFAULT_GLOBAL_CONFIG);
 
       const result = await manager.sendCommands("commands", "hello\nworld");
 
@@ -209,10 +216,10 @@ describe("ServerRuntimeManager", () => {
       const server = createServer({
         id: "batch",
         name: "Batch",
-        startCommand: "node -e \"console.log('start'); setInterval(() => {}, 1000)\"",
+        startArgs: ["-e", "process.stdin.on('data', d => console.log(d.toString())); setInterval(() => {}, 1000)"],
       });
 
-      await manager.startServer(server);
+      await manager.startServer(server, DEFAULT_GLOBAL_CONFIG);
 
       const result = await manager.sendCommands("batch", "line1\n\nline2");
 

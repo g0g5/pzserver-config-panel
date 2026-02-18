@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PZ Server Manager - 实例选择</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      min-height: 100vh;
+    }
+
+    .instance-select-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 40px 20px;
+    }
+
+    .instance-select-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 40px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .instance-select-header h1 {
+      color: #fff;
+      font-size: 28px;
+      font-weight: 300;
+      margin: 0;
+    }
+
+    .instance-select-header h1 span {
+      color: #4a9eff;
+    }
+
+    .global-settings-btn {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .global-settings-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .servers-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 24px;
+      margin-bottom: 40px;
+    }
+
+    .server-card {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 24px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .server-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #4a9eff, #00d4aa);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .server-card:hover::before {
+      opacity: 1;
+    }
+
+    .server-card:hover {
+      background: rgba(255, 255, 255, 0.08);
+      transform: translateY(-4px);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    .server-card.running {
+      border-color: rgba(74, 158, 255, 0.3);
+    }
+
+    .server-card.running::before {
+      opacity: 1;
+      background: linear-gradient(90deg, #00d4aa, #4a9eff);
+    }
+
+    .server-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 16px;
+    }
+
+    .server-card-name {
+      color: #fff;
+      font-size: 20px;
+      font-weight: 500;
+      margin: 0;
+    }
+
+    .server-card-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+    }
+
+    .server-card-status.stopped {
+      background: rgba(255, 255, 255, 0.1);
+      color: #888;
+    }
+
+    .server-card-status.running {
+      background: rgba(0, 212, 170, 0.2);
+      color: #00d4aa;
+    }
+
+    .server-card-status.starting {
+      background: rgba(255, 193, 7, 0.2);
+      color: #ffc107;
+    }
+
+    .server-card-status.stopping {
+      background: rgba(255, 152, 0, 0.2);
+      color: #ff9800;
+    }
+
+    .server-card-status.error {
+      background: rgba(244, 67, 54, 0.2);
+      color: #f44336;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .server-card-path {
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 13px;
+      font-family: monospace;
+      margin-bottom: 20px;
+      word-break: break-all;
+    }
+
+    .server-card-actions {
+      display: flex;
+      gap: 12px;
+    }
+
+    .server-card-btn {
+      flex: 1;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .server-card-btn.primary {
+      background: linear-gradient(135deg, #4a9eff, #00d4aa);
+      color: #fff;
+    }
+
+    .server-card-btn.primary:hover {
+      transform: scale(1.02);
+      box-shadow: 0 4px 12px rgba(74, 158, 255, 0.4);
+    }
+
+    .server-card-btn.secondary {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+
+    .server-card-btn.secondary:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .server-card-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .add-server-section {
+      text-align: center;
+      padding: 40px;
+    }
+
+    .add-server-btn {
+      background: transparent;
+      border: 2px dashed rgba(255, 255, 255, 0.3);
+      color: rgba(255, 255, 255, 0.6);
+      padding: 40px 60px;
+      border-radius: 16px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: all 0.3s;
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .add-server-btn:hover {
+      border-color: #4a9eff;
+      color: #4a9eff;
+      background: rgba(74, 158, 255, 0.05);
+    }
+
+    .add-server-btn .icon {
+      font-size: 24px;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    .empty-state-icon {
+      font-size: 64px;
+      margin-bottom: 20px;
+      opacity: 0.3;
+    }
+
+    .empty-state h3 {
+      color: #fff;
+      font-size: 20px;
+      margin-bottom: 12px;
+    }
+
+    /* 对话框样式 */
+    .dialog-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.8);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .dialog-overlay.active {
+      display: flex;
+    }
+
+    .dialog-content {
+      background: #1a1a2e;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      width: 100%;
+      max-width: 500px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+
+    .dialog-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 24px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .dialog-header h3 {
+      color: #fff;
+      margin: 0;
+      font-size: 20px;
+    }
+
+    .dialog-close {
+      background: none;
+      border: none;
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 24px;
+      cursor: pointer;
+      padding: 0;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      transition: all 0.3s;
+    }
+
+    .dialog-close:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+
+    .dialog-body {
+      padding: 24px;
+    }
+
+    .dialog-input-group {
+      margin-bottom: 20px;
+    }
+
+    .dialog-input-group label {
+      display: block;
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+
+    .dialog-input {
+      width: 100%;
+      padding: 12px 16px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      color: #fff;
+      font-size: 15px;
+      transition: all 0.3s;
+    }
+
+    .dialog-input:focus {
+      outline: none;
+      border-color: #4a9eff;
+    }
+
+    .dialog-input::placeholder {
+      color: rgba(255, 255, 255, 0.3);
+    }
+
+    .dialog-textarea {
+      width: 100%;
+      padding: 12px 16px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      color: #fff;
+      font-size: 15px;
+      resize: vertical;
+      min-height: 80px;
+      font-family: inherit;
+    }
+
+    .dialog-textarea:focus {
+      outline: none;
+      border-color: #4a9eff;
+    }
+
+    .dialog-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      padding: 24px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .dialog-button {
+      padding: 10px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .dialog-button.cancel {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+
+    .dialog-button.cancel:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .dialog-button.confirm {
+      background: linear-gradient(135deg, #4a9eff, #00d4aa);
+      color: #fff;
+    }
+
+    .dialog-button.confirm:hover {
+      transform: scale(1.02);
+    }
+
+    .dialog-button.delete {
+      background: rgba(244, 67, 54, 0.2);
+      color: #f44336;
+    }
+
+    .dialog-button.delete:hover {
+      background: rgba(244, 67, 54, 0.3);
+    }
+
+    .dialog-hint {
+      color: rgba(255, 255, 255, 0.4);
+      font-size: 12px;
+      margin-top: 4px;
+    }
+
+    /* Toast提示 */
+    .toast-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 2000;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .toast {
+      padding: 16px 24px;
+      border-radius: 12px;
+      color: #fff;
+      font-size: 14px;
+      opacity: 0;
+      transform: translateX(100px);
+      transition: all 0.3s ease;
+      max-width: 400px;
+      word-break: break-word;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateX(0);
+    }
+
+    .toast.success {
+      background: linear-gradient(135deg, #00d4aa, #00b894);
+    }
+
+    .toast.error {
+      background: linear-gradient(135deg, #f44336, #d32f2f);
+    }
+
+    .toast.info {
+      background: linear-gradient(135deg, #4a9eff, #2196f3);
+    }
+
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 3000;
+    }
+
+    .loading-overlay.active {
+      display: flex;
+    }
+
+    .loading-spinner {
+      width: 50px;
+      height: 50px;
+      border: 3px solid rgba(255, 255, 255, 0.1);
+      border-top-color: #4a9eff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="instance-select-container">
+    <header class="instance-select-header">
+      <h1>PZ <span>Server Manager</span></h1>
+      <button class="global-settings-btn" id="globalSettingsBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M12 1v6m0 6v6m4.22-10.22l4.24-4.24M6.34 6.34L2.1 2.1m17.8 17.8l-4.24-4.24M6.34 17.66l-4.24 4.24M23 12h-6m-6 0H1m20.07-4.93l-4.24 4.24M6.34 6.34l-4.24-4.24"></path>
+        </svg>
+        全局设置
+      </button>
+    </header>
+
+    <div id="serversGrid" class="servers-grid">
+      <!-- 服务器卡片将在这里动态生成 -->
+    </div>
+
+    <div class="add-server-section">
+      <button class="add-server-btn" id="addServerBtn">
+        <span class="icon">+</span>
+        添加新实例
+      </button>
+    </div>
+  </div>
+
+  <!-- 添加/编辑实例对话框 -->
+  <div id="serverDialog" class="dialog-overlay">
+    <div class="dialog-content">
+      <div class="dialog-header">
+        <h3 id="serverDialogTitle">添加服务器实例</h3>
+        <button class="dialog-close" id="closeServerDialog">&times;</button>
+      </div>
+      <div class="dialog-body">
+        <input type="hidden" id="serverDialogId" value="">
+        <div class="dialog-input-group">
+          <label for="serverNameInput">实例名称</label>
+          <input type="text" id="serverNameInput" class="dialog-input" placeholder="例如: 主服务器">
+        </div>
+        <div class="dialog-input-group">
+          <label for="serverIniPathInput">INI 配置文件路径</label>
+          <input type="text" id="serverIniPathInput" class="dialog-input" placeholder="例如: /home/user/Zomboid/Server/server.ini">
+          <p class="dialog-hint">必须是绝对路径，以 .ini 结尾</p>
+        </div>
+        <div class="dialog-input-group">
+          <label for="serverStartArgsInput">启动参数（每行一个）</label>
+          <textarea id="serverStartArgsInput" class="dialog-textarea" rows="3" placeholder="-servername&#10;myserver"></textarea>
+          <p class="dialog-hint">留空将使用默认值: -servername &lt;ini文件名&gt;</p>
+        </div>
+        <div class="dialog-input-group">
+          <label for="serverStopCmdsInput">停止命令列表（每行一个）</label>
+          <textarea id="serverStopCmdsInput" class="dialog-textarea" rows="3" placeholder="save&#10;quit">save
+quit</textarea>
+        </div>
+      </div>
+      <div class="dialog-footer">
+        <button class="dialog-button delete" id="deleteServerBtn" style="display: none; margin-right: auto;">删除</button>
+        <button class="dialog-button cancel" id="cancelServerDialog">取消</button>
+        <button class="dialog-button confirm" id="confirmServerDialog">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 全局设置对话框 -->
+  <div id="globalSettingsDialog" class="dialog-overlay">
+    <div class="dialog-content">
+      <div class="dialog-header">
+        <h3>全局设置</h3>
+        <button class="dialog-close" id="closeGlobalSettingsDialog">&times;</button>
+      </div>
+      <div class="dialog-body">
+        <div class="dialog-input-group">
+          <label for="globalWorkshopPath">Workshop 文件夹路径</label>
+          <input type="text" id="globalWorkshopPath" class="dialog-input" placeholder="例如: /home/user/Steam/steamapps/workshop/content/108600">
+          <p class="dialog-hint">创意工坊模组的存储路径</p>
+        </div>
+        <div class="dialog-input-group">
+          <label for="globalStartScriptPath">启动脚本路径</label>
+          <input type="text" id="globalStartScriptPath" class="dialog-input" placeholder="例如: /home/user/pzserver/start-server.sh">
+          <p class="dialog-hint">必须是绝对路径，所有实例共享此启动脚本</p>
+        </div>
+        <div class="dialog-input-group">
+          <label for="globalStopGraceTimeout">优雅停止超时 (毫秒)</label>
+          <input type="number" id="globalStopGraceTimeout" class="dialog-input" value="45000">
+          <p class="dialog-hint">发送停止命令后等待进程退出的最大时间</p>
+        </div>
+        <div class="dialog-input-group">
+          <label for="globalForceKillTimeout">强制终止超时 (毫秒)</label>
+          <input type="number" id="globalForceKillTimeout" class="dialog-input" value="10000">
+          <p class="dialog-hint">SIGTERM 后等待的最大时间，超时则发送 SIGKILL</p>
+        </div>
+      </div>
+      <div class="dialog-footer">
+        <button class="dialog-button cancel" id="cancelGlobalSettingsDialog">取消</button>
+        <button class="dialog-button confirm" id="confirmGlobalSettingsDialog">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast提示 -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- Loading -->
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-spinner"></div>
+  </div>
+
+  <script src="instance-select.js"></script>
+</body>
+</html>

@@ -8,10 +8,11 @@ let mapItems = [];
 let groupedNormalItems = {};
 let currentAddType = null;
 
-// V2 新增：服务器管理
+// V2.1: 服务器管理
 let serversConfig = null;
 let runtimeSnapshot = null;
-let selectedServerId = null;
+let currentServerId = null;
+let currentServer = null;
 let terminalEventSource = null;
 let commandSuggestions = [];
 let selectedSuggestionIndex = -1;
@@ -48,6 +49,12 @@ const ITEM_GROUPS = {
   }
 };
 
+// ===== URL 参数处理 =====
+function getUrlParam(name) {
+  const params = new URLSearchParams(window.location.search);
+  return params.get(name);
+}
+
 // ===== Toast 提示 =====
 function showToast(message, type = "info") {
   const toastContainer = document.getElementById("toastContainer");
@@ -68,24 +75,21 @@ function showToast(message, type = "info") {
   }, 3000);
 }
 
-function setConnectionStatus(connected) {
-  const status = document.getElementById("connectionStatus");
-  status.className = "status-indicator " + (connected ? "connected" : "disconnected");
-}
-
 // ===== 配置加载与渲染 =====
 async function loadConfig() {
   try {
-    const serverId = selectedServerId || "";
-    const response = await fetch(`/api/config${serverId ? `?serverId=${encodeURIComponent(serverId)}` : ""}`);
+    if (!currentServerId) {
+      showToast("未选择服务器实例", "error");
+      return;
+    }
+    
+    const response = await fetch(`/api/config?serverId=${encodeURIComponent(currentServerId)}`);
     if (!response.ok) {
       throw new Error(`Failed to load config: ${response.status}`);
     }
     configData = await response.json();
-    setConnectionStatus(true);
     renderConfig();
   } catch (error) {
-    setConnectionStatus(false);
     showToast("配置加载失败: " + error.message, "error");
     console.error(error);
   }
@@ -93,8 +97,6 @@ async function loadConfig() {
 
 function renderConfig() {
   if (!configData) return;
-
-  document.getElementById("configPath").textContent = configData.configPath || "未选择配置文件";
 
   normalItems = [];
   modsItems = [];
@@ -583,8 +585,7 @@ async function saveConfig() {
 
   try {
     const items = gatherConfigItems();
-    const serverId = selectedServerId || "";
-    const response = await fetch(`/api/config${serverId ? `?serverId=${encodeURIComponent(serverId)}` : ""}`, {
+    const response = await fetch(`/api/config?serverId=${encodeURIComponent(currentServerId)}`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
@@ -621,16 +622,30 @@ function toggleCollapse(targetId) {
   }
 }
 
-// ===== V2: 服务器实例管理 =====
+// ===== V2.1: 服务器管理 =====
 
 async function loadServersConfig() {
   try {
     const response = await fetch("/api/servers-config");
     if (!response.ok) throw new Error("加载服务器配置失败");
     serversConfig = await response.json();
-    renderServersList();
+    
+    // 更新当前服务器
+    if (currentServerId) {
+      currentServer = serversConfig.servers.find(s => s.id === currentServerId);
+      if (!currentServer) {
+        showToast("未找到指定的服务器实例", "error");
+        return false;
+      }
+      updateHeaderInfo();
+      updateInstanceInfo();
+      updateGlobalConfigUI();
+    }
+    
+    return true;
   } catch (error) {
     showToast("加载服务器配置失败: " + error.message, "error");
+    return false;
   }
 }
 
@@ -639,61 +654,43 @@ async function loadRuntimeStatus() {
     const response = await fetch("/api/servers/runtime");
     if (!response.ok) throw new Error("加载运行状态失败");
     runtimeSnapshot = await response.json();
-    updateServersUI();
+    updateControlPanel();
   } catch (error) {
     console.error("加载运行状态失败:", error);
   }
 }
 
-function renderServersList() {
-  const container = document.getElementById("serversList");
-  container.innerHTML = "";
-
-  if (!serversConfig || !serversConfig.servers || serversConfig.servers.length === 0) {
-    container.innerHTML = '<div class="no-servers">暂无服务器实例，请点击"添加实例"创建</div>';
-    return;
+function updateHeaderInfo() {
+  const headerName = document.getElementById("headerServerName");
+  if (currentServer) {
+    headerName.textContent = currentServer.name;
+    document.title = `PZ Server Manager - ${currentServer.name}`;
   }
-
-  serversConfig.servers.forEach(server => {
-    const div = document.createElement("div");
-    div.className = "server-item";
-    div.dataset.serverId = server.id;
-    
-    if (server.id === selectedServerId) {
-      div.classList.add("selected");
-    }
-
-    const runtime = runtimeSnapshot?.servers?.find(s => s.serverId === server.id);
-    const status = runtime?.status || "unknown";
-    
-    const isAnotherRunning = runtimeSnapshot?.activeServerId && runtimeSnapshot.activeServerId !== server.id;
-    if (isAnotherRunning) {
-      div.classList.add("disabled");
-    }
-
-    div.innerHTML = `
-      <div class="server-item-header">
-        <span class="server-item-name">${escapeHtml(server.name)}</span>
-        <span class="server-status-badge ${status}">${getStatusText(status)}</span>
-      </div>
-      <div class="server-item-path">${escapeHtml(server.iniPath)}</div>
-    `;
-
-    div.addEventListener("click", () => selectServer(server.id));
-    container.appendChild(div);
-  });
 }
 
-function updateServersUI() {
-  renderServersList();
-  updateControlPanel();
+function updateInstanceInfo() {
+  if (!currentServer) return;
+  
+  document.getElementById("instanceId").textContent = currentServer.id;
+  document.getElementById("instanceName").textContent = currentServer.name;
+  document.getElementById("instanceIniPath").textContent = currentServer.iniPath;
+  document.getElementById("instanceStartArgs").textContent = currentServer.startArgs.join(" ");
+  document.getElementById("instanceStopCommands").textContent = currentServer.stopCommands.join(", ");
+}
+
+function updateGlobalConfigUI() {
+  if (!serversConfig || !serversConfig.global) return;
+  
+  const global = serversConfig.global;
+  document.getElementById("workshopPath").value = global.workshopPath || "";
+  document.getElementById("startScriptPath").value = global.startScriptPath || "";
+  document.getElementById("stopGraceTimeout").value = global.stopGraceTimeoutMs || 45000;
+  document.getElementById("forceKillTimeout").value = global.forceKillTimeoutMs || 10000;
 }
 
 function updateControlPanel() {
-  const selectedServer = serversConfig?.servers?.find(s => s.id === selectedServerId);
-  const runtime = runtimeSnapshot?.servers?.find(s => s.serverId === selectedServerId);
+  const runtime = runtimeSnapshot?.servers?.find(s => s.serverId === currentServerId);
   
-  const nameEl = document.getElementById("selectedServerName");
   const statusEl = document.getElementById("selectedServerStatus");
   const startBtn = document.getElementById("startServerBtn");
   const stopBtn = document.getElementById("stopServerBtn");
@@ -702,24 +699,12 @@ function updateControlPanel() {
   const startedAtEl = document.getElementById("serverStartedAt");
   const sendBtn = document.getElementById("sendCommandBtn");
 
-  if (!selectedServer) {
-    nameEl.textContent = "未选择实例";
-    statusEl.textContent = "--";
-    statusEl.className = "server-status-badge";
-    startBtn.disabled = true;
-    stopBtn.disabled = true;
-    infoEl.style.display = "none";
-    sendBtn.disabled = true;
-    return;
-  }
-
-  nameEl.textContent = selectedServer.name;
   const status = runtime?.status || "unknown";
   statusEl.textContent = getStatusText(status);
   statusEl.className = "server-status-badge " + status;
 
   const isRunning = status === "running";
-  const isAnotherRunning = runtimeSnapshot?.activeServerId && runtimeSnapshot.activeServerId !== selectedServerId;
+  const isAnotherRunning = runtimeSnapshot?.activeServerId && runtimeSnapshot.activeServerId !== currentServerId;
   const isStartingOrStopping = status === "starting" || status === "stopping";
 
   startBtn.disabled = isRunning || isAnotherRunning || isStartingOrStopping;
@@ -735,30 +720,15 @@ function updateControlPanel() {
   }
 }
 
-function selectServer(serverId) {
-  selectedServerId = serverId;
-  renderServersList();
-  updateControlPanel();
-  
-  // 重新连接终端
-  reconnectTerminal();
-  
-  // 如果在配置管理标签页，重新加载配置
-  const configTab = document.getElementById("config-tab");
-  if (configTab.classList.contains("active")) {
-    loadConfig();
-  }
-}
-
 async function startServer() {
-  if (!selectedServerId) return;
+  if (!currentServerId) return;
   
   const btn = document.getElementById("startServerBtn");
   btn.disabled = true;
   showToast("正在启动服务器...", "info");
   
   try {
-    const response = await fetch(`/api/servers/${encodeURIComponent(selectedServerId)}/start`, {
+    const response = await fetch(`/api/servers/${encodeURIComponent(currentServerId)}/start`, {
       method: "POST"
     });
     
@@ -770,23 +740,24 @@ async function startServer() {
     
     runtimeSnapshot = data;
     showToast("服务器启动成功", "success");
-    updateServersUI();
+    updateControlPanel();
     reconnectTerminal();
   } catch (error) {
     showToast("启动失败: " + error.message, "error");
+  } finally {
     btn.disabled = false;
   }
 }
 
 async function stopServer() {
-  if (!selectedServerId) return;
+  if (!currentServerId) return;
   
   const btn = document.getElementById("stopServerBtn");
   btn.disabled = true;
   showToast("正在停止服务器...", "info");
   
   try {
-    const response = await fetch(`/api/servers/${encodeURIComponent(selectedServerId)}/stop`, {
+    const response = await fetch(`/api/servers/${encodeURIComponent(currentServerId)}/stop`, {
       method: "POST"
     });
     
@@ -798,13 +769,13 @@ async function stopServer() {
     
     runtimeSnapshot = data;
     showToast("服务器停止成功", "success");
-    updateServersUI();
+    updateControlPanel();
   } catch (error) {
     showToast("停止失败: " + error.message, "error");
   }
 }
 
-// ===== V2: 终端功能 =====
+// ===== 终端功能 =====
 
 function reconnectTerminal() {
   // 关闭现有连接
@@ -817,16 +788,16 @@ function reconnectTerminal() {
   const output = document.getElementById("terminalOutput");
   output.innerHTML = '';
   
-  if (!selectedServerId) return;
+  if (!currentServerId) return;
   
-  const runtime = runtimeSnapshot?.servers?.find(s => s.serverId === selectedServerId);
+  const runtime = runtimeSnapshot?.servers?.find(s => s.serverId === currentServerId);
   if (!runtime || runtime.status !== "running") {
     addTerminalLine({ stream: "system", text: "服务器未运行，无法连接终端" });
     return;
   }
   
   // 建立 SSE 连接
-  const es = new EventSource(`/api/servers/${encodeURIComponent(selectedServerId)}/terminal/stream`);
+  const es = new EventSource(`/api/servers/${encodeURIComponent(currentServerId)}/terminal/stream`);
   
   es.onmessage = (event) => {
     try {
@@ -875,16 +846,16 @@ async function sendCommands() {
   const input = document.getElementById("terminalInput");
   const text = input.value.trim();
   
-  if (!text || !selectedServerId) return;
+  if (!text || !currentServerId) return;
   
-  const runtime = runtimeSnapshot?.servers?.find(s => s.serverId === selectedServerId);
+  const runtime = runtimeSnapshot?.servers?.find(s => s.serverId === currentServerId);
   if (!runtime || runtime.status !== "running") {
     showToast("服务器未运行，无法发送命令", "error");
     return;
   }
   
   try {
-    const response = await fetch(`/api/servers/${encodeURIComponent(selectedServerId)}/terminal/commands`, {
+    const response = await fetch(`/api/servers/${encodeURIComponent(currentServerId)}/terminal/commands`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text })
@@ -909,7 +880,7 @@ async function sendCommands() {
   }
 }
 
-// ===== V2: 命令补全 =====
+// ===== 命令补全 =====
 
 async function fetchCommandSuggestions(prefix) {
   if (!prefix) {
@@ -998,190 +969,36 @@ function updateSuggestionSelection(delta) {
   });
 }
 
-// ===== V2: 服务器实例对话框 =====
+// ===== 全局设置 =====
 
-function showServerDialog(mode = "add", serverId = null) {
-  const dialog = document.getElementById("serverDialog");
-  const title = document.getElementById("serverDialogTitle");
-  const deleteBtn = document.getElementById("deleteServerBtn");
-  const idInput = document.getElementById("serverDialogId");
-  
-  if (mode === "edit" && serverId) {
-    const server = serversConfig.servers.find(s => s.id === serverId);
-    if (!server) return;
-    
-    title.textContent = "编辑服务器实例";
-    idInput.value = server.id;
-    document.getElementById("serverNameInput").value = server.name;
-    document.getElementById("serverIniPathInput").value = server.iniPath;
-    document.getElementById("serverStartCmdInput").value = server.startCommand;
-    document.getElementById("serverStopCmdsInput").value = (server.stopCommands || []).join("\n");
-    deleteBtn.style.display = "block";
-  } else {
-    title.textContent = "添加服务器实例";
-    idInput.value = "";
-    document.getElementById("serverNameInput").value = "";
-    document.getElementById("serverIniPathInput").value = "";
-    document.getElementById("serverStartCmdInput").value = "";
-    document.getElementById("serverStopCmdsInput").value = "save\nquit";
-    deleteBtn.style.display = "none";
-  }
-  
-  dialog.classList.add("active");
-}
-
-function hideServerDialog() {
-  const dialog = document.getElementById("serverDialog");
-  dialog.classList.remove("active");
-}
-
-async function saveServerDialog() {
-  const id = document.getElementById("serverDialogId").value;
-  const name = document.getElementById("serverNameInput").value.trim();
-  const iniPath = document.getElementById("serverIniPathInput").value.trim();
-  const startCommand = document.getElementById("serverStartCmdInput").value.trim();
-  const stopCommandsText = document.getElementById("serverStopCmdsInput").value;
-  const stopCommands = stopCommandsText.split("\n").map(s => s.trim()).filter(s => s);
-  
-  if (!name || !iniPath || !startCommand) {
-    showToast("请填写所有必填项", "error");
-    return;
-  }
-  
-  const newServer = {
-    id: id || "server-" + Date.now(),
-    name,
-    iniPath,
-    startCommand,
-    stopCommands
-  };
-  
-  const updatedConfig = { ...serversConfig };
-  
-  if (id) {
-    // 编辑模式
-    const idx = updatedConfig.servers.findIndex(s => s.id === id);
-    if (idx >= 0) {
-      updatedConfig.servers[idx] = newServer;
-    }
-  } else {
-    // 添加模式
-    updatedConfig.servers = [...(updatedConfig.servers || []), newServer];
-  }
-  
-  try {
-    const response = await fetch("/api/servers-config", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(updatedConfig)
-    });
-    
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error?.message || "保存失败");
-    }
-    
-    serversConfig = await response.json();
-    showToast(id ? "实例更新成功" : "实例添加成功", "success");
-    hideServerDialog();
-    renderServersList();
-  } catch (error) {
-    showToast("保存失败: " + error.message, "error");
-  }
-}
-
-async function deleteServer() {
-  const id = document.getElementById("serverDialogId").value;
-  if (!id) return;
-  
-  if (!confirm("确定要删除这个服务器实例吗？此操作不可撤销。")) {
-    return;
-  }
-  
-  const updatedConfig = {
-    ...serversConfig,
-    servers: serversConfig.servers.filter(s => s.id !== id)
-  };
-  
-  try {
-    const response = await fetch("/api/servers-config", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(updatedConfig)
-    });
-    
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error?.message || "删除失败");
-    }
-    
-    serversConfig = await response.json();
-    
-    if (selectedServerId === id) {
-      selectedServerId = null;
-      updateControlPanel();
-    }
-    
-    showToast("实例删除成功", "success");
-    hideServerDialog();
-    renderServersList();
-  } catch (error) {
-    showToast("删除失败: " + error.message, "error");
-  }
-}
-
-// ===== V2: 路径设置 =====
-
-async function loadPaths() {
-  try {
-    const response = await fetch("/api/paths");
-    if (response.ok) {
-      const paths = await response.json();
-      document.getElementById("workshopPath").value = paths.workshopPath || "";
-    }
-    
-    // 加载 servers-config 获取超时设置
-    const configResponse = await fetch("/api/servers-config");
-    if (configResponse.ok) {
-      const config = await configResponse.json();
-      document.getElementById("stopGraceTimeout").value = config.stopGraceTimeoutMs || 30000;
-      document.getElementById("forceKillTimeout").value = config.forceKillTimeoutMs || 10000;
-    }
-  } catch (error) {
-    console.error("加载路径设置失败:", error);
-  }
-}
-
-async function savePaths() {
-  const saveButton = document.getElementById("savePathsButton");
+async function saveGlobalConfig() {
+  const saveButton = document.getElementById("saveGlobalConfigBtn");
   saveButton.disabled = true;
   showToast("保存全局设置中...", "info");
 
   try {
-    const workshopPath = document.getElementById("workshopPath").value;
-    const stopGraceTimeoutMs = parseInt(document.getElementById("stopGraceTimeout").value) || 30000;
-    const forceKillTimeoutMs = parseInt(document.getElementById("forceKillTimeout").value) || 10000;
-
-    const updatedConfig = {
-      ...serversConfig,
-      workshopPath,
-      stopGraceTimeoutMs,
-      forceKillTimeoutMs
+    const globalConfig = {
+      workshopPath: document.getElementById("workshopPath").value.trim(),
+      startScriptPath: document.getElementById("startScriptPath").value.trim(),
+      stopGraceTimeoutMs: parseInt(document.getElementById("stopGraceTimeout").value, 10) || 45000,
+      forceKillTimeoutMs: parseInt(document.getElementById("forceKillTimeout").value, 10) || 10000,
     };
 
-    const response = await fetch("/api/servers-config", {
+    const response = await fetch("/api/global-config", {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(updatedConfig),
+      body: JSON.stringify(globalConfig),
     });
 
     if (!response.ok) {
-      throw new Error("保存到服务器失败");
+      const error = await response.json();
+      throw new Error(error.error?.message || "保存失败");
     }
 
-    serversConfig = await response.json();
+    // 更新本地配置
+    serversConfig.global = await response.json();
     showToast("全局设置保存成功", "success");
   } catch (error) {
     showToast("保存失败: " + error.message, "error");
@@ -1228,16 +1045,36 @@ function switchTab(tabName) {
   }
 }
 
+function goBack() {
+  window.location.href = "/instance-select.html";
+}
+
 // ===== 事件绑定 =====
 
 document.addEventListener("DOMContentLoaded", async () => {
+  // 从 URL 参数获取 serverId
+  currentServerId = getUrlParam("serverId");
+  
+  if (!currentServerId) {
+    showToast("未指定服务器实例，正在返回选择页面...", "error");
+    setTimeout(goBack, 2000);
+    return;
+  }
+  
   // 初始化
-  await loadServersConfig();
+  const loaded = await loadServersConfig();
+  if (!loaded) {
+    setTimeout(goBack, 2000);
+    return;
+  }
+  
   await loadRuntimeStatus();
-  await loadPaths();
   
   // 定期刷新状态
   setInterval(loadRuntimeStatus, 2000);
+  
+  // 返回按钮
+  document.getElementById("backButton").addEventListener("click", goBack);
   
   // Tab 切换
   document.querySelectorAll(".tab-button").forEach((button) => {
@@ -1250,7 +1087,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("saveButton").addEventListener("click", saveConfig);
   
   // 服务器控制
-  document.getElementById("addServerBtn").addEventListener("click", () => showServerDialog("add"));
   document.getElementById("startServerBtn").addEventListener("click", startServer);
   document.getElementById("stopServerBtn").addEventListener("click", stopServer);
   
@@ -1297,20 +1133,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     }, 200);
   });
   
-  // 服务器实例对话框
-  document.getElementById("closeServerDialog").addEventListener("click", hideServerDialog);
-  document.getElementById("cancelServerDialog").addEventListener("click", hideServerDialog);
-  document.getElementById("confirmServerDialog").addEventListener("click", saveServerDialog);
-  document.getElementById("deleteServerBtn").addEventListener("click", deleteServer);
-  
-  document.getElementById("serverDialog").addEventListener("click", (e) => {
-    if (e.target === e.currentTarget) {
-      hideServerDialog();
-    }
-  });
-  
-  // 路径设置
-  document.getElementById("savePathsButton").addEventListener("click", savePaths);
+  // 全局设置
+  document.getElementById("saveGlobalConfigBtn").addEventListener("click", saveGlobalConfig);
   
   // 配置管理
   document.querySelectorAll(".add-button").forEach((button) => {
@@ -1339,7 +1163,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       hideDialog();
-      hideServerDialog();
       hideCommandSuggestions();
     }
   });
@@ -1347,15 +1170,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("dialogInput").addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       confirmAddItem();
-    }
-  });
-  
-  // 双击服务器实例列表项打开编辑
-  document.getElementById("serversList").addEventListener("dblclick", (e) => {
-    const item = e.target.closest(".server-item");
-    if (item) {
-      const serverId = item.dataset.serverId;
-      showServerDialog("edit", serverId);
     }
   });
 });

@@ -3,14 +3,156 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PZ Server Config Panel</title>
+  <title>PZ Server Manager</title>
   <link rel="stylesheet" href="style.css">
+  <style>
+    /* V2.1 新增样式 */
+    .back-button {
+      background: rgba(255, 255, 255, 0.1);
+      border: none;
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      transition: all 0.3s;
+    }
+    
+    .back-button:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+    
+    .header-server-name {
+      color: #fff;
+      font-size: 16px;
+      font-weight: 500;
+    }
+    
+    .instance-info-section {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    
+    .instance-info-section h3 {
+      color: #fff;
+      margin: 0 0 16px 0;
+      font-size: 16px;
+    }
+    
+    .instance-info-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .instance-info-item:last-child {
+      border-bottom: none;
+    }
+    
+    .instance-info-label {
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 14px;
+    }
+    
+    .instance-info-value {
+      color: #fff;
+      font-size: 14px;
+      font-family: monospace;
+      word-break: break-all;
+      max-width: 60%;
+      text-align: right;
+    }
+    
+    .global-config-section {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 20px;
+    }
+    
+    .global-config-section h3 {
+      color: #fff;
+      margin: 0 0 16px 0;
+      font-size: 16px;
+    }
+    
+    .paths-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 20px;
+    }
+    
+    @media (min-width: 768px) {
+      .paths-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+    
+    .path-item {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    
+    .path-label {
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 14px;
+    }
+    
+    .path-input {
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      color: #fff;
+      font-size: 14px;
+    }
+    
+    .path-input:focus {
+      outline: none;
+      border-color: #4a9eff;
+    }
+    
+    .path-description {
+      color: rgba(255, 255, 255, 0.4);
+      font-size: 12px;
+    }
+    
+    .save-paths-btn {
+      margin-top: 20px;
+      background: linear-gradient(135deg, #4a9eff, #00d4aa);
+      border: none;
+      color: #fff;
+      padding: 12px 24px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    
+    .save-paths-btn:hover {
+      transform: scale(1.02);
+    }
+  </style>
 </head>
 <body>
   <header>
     <div class="header-left">
-      <span id="configPath" class="config-path"></span>
-      <span id="connectionStatus" class="status-indicator"></span>
+      <button id="backButton" class="back-button">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M19 12H5M12 19l-7-7 7-7"></path>
+        </svg>
+        返回
+      </button>
+      <span id="headerServerName" class="header-server-name"></span>
     </div>
     <div class="header-center">
       <span id="singleActiveModeIndicator" class="mode-indicator">
@@ -26,85 +168,71 @@
 
   <main>
     <div class="tab-navigation">
-      <button class="tab-button active" data-tab="servers">实例管理</button>
+      <button class="tab-button active" data-tab="console">控制台</button>
       <button class="tab-button" data-tab="config">配置管理</button>
-      <button class="tab-button" data-tab="paths">路径设置</button>
+      <button class="tab-button" data-tab="paths">全局设置</button>
     </div>
 
-    <div class="tab-content active" id="servers-tab">
-      <div class="servers-layout">
-        <!-- 实例列表 -->
-        <section class="servers-list-section">
-          <div class="section-header">
-            <h2>服务器实例</h2>
-            <button id="addServerBtn" class="add-button">添加实例</button>
-          </div>
-          <div id="serversList" class="servers-list"></div>
-        </section>
+    <div class="tab-content active" id="console-tab">
+      <!-- 控制面板 -->
+      <div class="control-panel" id="controlPanel">
+        <div class="control-header">
+          <span id="selectedServerStatus" class="server-status-badge">--</span>
+        </div>
+        
+        <div class="control-actions">
+          <button id="startServerBtn" class="control-btn start">
+            <span class="btn-icon">▶</span>
+            启动服务器
+          </button>
+          <button id="stopServerBtn" class="control-btn stop">
+            <span class="btn-icon">■</span>
+            停止服务器
+          </button>
+        </div>
 
-        <!-- 实例控制区 -->
-        <section class="server-control-section">
-          <div class="control-panel" id="controlPanel">
-            <div class="control-header">
-              <h3 id="selectedServerName">未选择实例</h3>
-              <span id="selectedServerStatus" class="server-status-badge">--</span>
-            </div>
-            
-            <div class="control-actions">
-              <button id="startServerBtn" class="control-btn start" disabled>
-                <span class="btn-icon">▶</span>
-                启动服务器
-              </button>
-              <button id="stopServerBtn" class="control-btn stop" disabled>
-                <span class="btn-icon">■</span>
-                停止服务器
-              </button>
-            </div>
-
-            <div class="control-info" id="controlInfo" style="display: none;">
-              <div class="info-item">
-                <span class="info-label">PID:</span>
-                <span id="serverPid" class="info-value">--</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">启动时间:</span>
-                <span id="serverStartedAt" class="info-value">--</span>
-              </div>
-            </div>
+        <div class="control-info" id="controlInfo" style="display: none;">
+          <div class="info-item">
+            <span class="info-label">PID:</span>
+            <span id="serverPid" class="info-value">--</span>
           </div>
-
-          <!-- 终端区域 -->
-          <div class="terminal-section">
-            <div class="terminal-header">
-              <h3>终端日志</h3>
-              <div class="terminal-controls">
-                <label class="auto-scroll-toggle">
-                  <input type="checkbox" id="autoScrollToggle" checked>
-                  <span>自动滚动</span>
-                </label>
-                <button id="clearTerminalBtn" class="terminal-btn">清空</button>
-                <button id="reconnectTerminalBtn" class="terminal-btn">重连</button>
-              </div>
-            </div>
-            <div id="terminalOutput" class="terminal-output"></div>
-            <div class="terminal-input-area">
-              <div class="terminal-input-wrapper">
-                <textarea 
-                  id="terminalInput" 
-                  class="terminal-input" 
-                  placeholder="输入命令（支持多行，Enter发送，Shift+Enter换行）..."
-                  rows="2"
-                ></textarea>
-                <div id="commandSuggestions" class="command-suggestions"></div>
-              </div>
-              <button id="sendCommandBtn" class="send-command-btn" disabled>发送</button>
-            </div>
+          <div class="info-item">
+            <span class="info-label">启动时间:</span>
+            <span id="serverStartedAt" class="info-value">--</span>
           </div>
-        </section>
+        </div>
+      </div>
+
+      <!-- 终端区域 -->
+      <div class="terminal-section">
+        <div class="terminal-header">
+          <h3>终端日志</h3>
+          <div class="terminal-controls">
+            <label class="auto-scroll-toggle">
+              <input type="checkbox" id="autoScrollToggle" checked>
+              <span>自动滚动</span>
+            </label>
+            <button id="clearTerminalBtn" class="terminal-btn">清空</button>
+            <button id="reconnectTerminalBtn" class="terminal-btn">重连</button>
+          </div>
+        </div>
+        <div id="terminalOutput" class="terminal-output"></div>
+        <div class="terminal-input-area">
+          <div class="terminal-input-wrapper">
+            <textarea 
+              id="terminalInput" 
+              class="terminal-input" 
+              placeholder="输入命令（支持多行，Enter发送，Shift+Enter换行）..."
+              rows="2"
+            ></textarea>
+            <div id="commandSuggestions" class="command-suggestions"></div>
+          </div>
+          <button id="sendCommandBtn" class="send-command-btn">发送</button>
+        </div>
       </div>
     </div>
 
-    <div class="tab-content active" id="config-tab">
+    <div class="tab-content" id="config-tab">
       <div class="main-content">
         <div class="left-column">
           <section id="normalItems" class="config-section">
@@ -113,7 +241,6 @@
           </section>
         </div>
         <div class="right-column">
-
           <section id="workshopItemsSection" class="config-section">
             <div class="section-header">
               <h2>WorkshopItems (创意工坊)</h2>
@@ -157,28 +284,60 @@
     </div>
 
     <div class="tab-content" id="paths-tab">
-      <div class="config-section">
-        <h2>全局路径设置</h2>
-        <div class="paths-content">
+      <!-- 实例信息 -->
+      <div class="instance-info-section">
+        <h3>当前实例设置</h3>
+        <div class="instance-info-item">
+          <span class="instance-info-label">实例 ID</span>
+          <span id="instanceId" class="instance-info-value">--</span>
+        </div>
+        <div class="instance-info-item">
+          <span class="instance-info-label">实例名称</span>
+          <span id="instanceName" class="instance-info-value">--</span>
+        </div>
+        <div class="instance-info-item">
+          <span class="instance-info-label">INI 路径</span>
+          <span id="instanceIniPath" class="instance-info-value">--</span>
+        </div>
+        <div class="instance-info-item">
+          <span class="instance-info-label">启动参数</span>
+          <span id="instanceStartArgs" class="instance-info-value">--</span>
+        </div>
+        <div class="instance-info-item">
+          <span class="instance-info-label">停止命令</span>
+          <span id="instanceStopCommands" class="instance-info-value">--</span>
+        </div>
+      </div>
+
+      <!-- 全局配置 -->
+      <div class="global-config-section">
+        <h3>全局配置</h3>
+        <div class="paths-grid">
           <div class="path-item">
-            <div class="path-label">Workshop 文件夹路径</div>
-            <div class="path-description">创意工坊模组的存储路径，用于自动管理模组</div>
+            <label class="path-label">Workshop 文件夹路径</label>
             <input type="text" id="workshopPath" class="path-input" placeholder="例如: /home/user/Steam/steamapps/workshop/content/108600">
+            <p class="path-description">创意工坊模组的存储路径</p>
           </div>
+          
           <div class="path-item">
-            <div class="path-label">优雅停止超时 (毫秒)</div>
-            <div class="path-description">发送停止命令后等待进程退出的最大时间</div>
-            <input type="number" id="stopGraceTimeout" class="path-input" value="30000">
+            <label class="path-label">启动脚本路径</label>
+            <input type="text" id="startScriptPath" class="path-input" placeholder="例如: /home/user/pzserver/start-server.sh">
+            <p class="path-description">所有实例共享的启动脚本，必须是绝对路径</p>
           </div>
+          
           <div class="path-item">
-            <div class="path-label">强制终止超时 (毫秒)</div>
-            <div class="path-description">SIGTERM 后等待的最大时间，超时则发送 SIGKILL</div>
+            <label class="path-label">优雅停止超时 (毫秒)</label>
+            <input type="number" id="stopGraceTimeout" class="path-input" value="45000">
+            <p class="path-description">发送停止命令后等待进程退出的最大时间</p>
+          </div>
+          
+          <div class="path-item">
+            <label class="path-label">强制终止超时 (毫秒)</label>
             <input type="number" id="forceKillTimeout" class="path-input" value="10000">
-          </div>
-          <div class="path-actions">
-            <button id="savePathsButton" class="save-button">保存全局设置</button>
+            <p class="path-description">SIGTERM 后等待的最大时间，超时则发送 SIGKILL</p>
           </div>
         </div>
+        <button id="saveGlobalConfigBtn" class="save-paths-btn">保存全局设置</button>
       </div>
     </div>
   </main>
@@ -199,42 +358,6 @@
       <div class="dialog-footer">
         <button id="cancelDialog" class="dialog-button cancel">取消</button>
         <button id="confirmDialog" class="dialog-button confirm">确认</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 添加/编辑服务器实例对话框 -->
-  <div id="serverDialog" class="dialog-overlay">
-    <div class="dialog-content dialog-large">
-      <div class="dialog-header">
-        <h3 id="serverDialogTitle">添加服务器实例</h3>
-        <button id="closeServerDialog" class="dialog-close">&times;</button>
-      </div>
-      <div class="dialog-body">
-        <input type="hidden" id="serverDialogId" value="">
-        <div class="dialog-input-group">
-          <label for="serverNameInput">实例名称</label>
-          <input type="text" id="serverNameInput" class="dialog-input" placeholder="例如: 主服务器">
-        </div>
-        <div class="dialog-input-group">
-          <label for="serverIniPathInput">INI 配置文件路径</label>
-          <input type="text" id="serverIniPathInput" class="dialog-input" placeholder="例如: /path/to/server.ini">
-        </div>
-        <div class="dialog-input-group">
-          <label for="serverStartCmdInput">启动命令</label>
-          <input type="text" id="serverStartCmdInput" class="dialog-input" placeholder="例如: /path/to/start-server.sh">
-        </div>
-        <div class="dialog-input-group">
-          <label for="serverStopCmdsInput">停止命令列表（每行一个）</label>
-          <textarea id="serverStopCmdsInput" class="dialog-textarea" rows="4" placeholder="save&#10;quit"></textarea>
-        </div>
-      </div>
-      <div class="dialog-footer">
-        <button id="deleteServerBtn" class="dialog-button delete" style="display: none;">删除</button>
-        <div class="dialog-footer-right">
-          <button id="cancelServerDialog" class="dialog-button cancel">取消</button>
-          <button id="confirmServerDialog" class="dialog-button confirm">保存</button>
-        </div>
       </div>
     </div>
   </div>

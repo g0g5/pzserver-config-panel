@@ -57,7 +57,7 @@ export function createServersRuntimeRouter(
     try {
       const config = await loadServersConfig({ cliConfigPath });
       const server = resolveServerById(config.servers, req.params.id);
-      await runtimeManager.startServer(server);
+      await runtimeManager.startServer(server, config.global);
       res.json(runtimeManager.getRuntimeSnapshot(config.servers));
     } catch (error) {
       sendRouteError(error, res);
@@ -69,8 +69,8 @@ export function createServersRuntimeRouter(
       const config = await loadServersConfig({ cliConfigPath });
       const server = resolveServerById(config.servers, req.params.id);
       const stopOptions = buildStopOptions(
-        config.stopGraceTimeoutMs,
-        config.forceKillTimeoutMs,
+        config.global.stopGraceTimeoutMs,
+        config.global.forceKillTimeoutMs,
       );
       await runtimeManager.stopServer(server, stopOptions);
       res.json(runtimeManager.getRuntimeSnapshot(config.servers));

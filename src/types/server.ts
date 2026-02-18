@@ -1,15 +1,20 @@
+export type ServerGlobalConfig = {
+  workshopPath: string;
+  startScriptPath: string;
+  stopGraceTimeoutMs: number;
+  forceKillTimeoutMs: number;
+};
+
 export type ServerInstance = {
   id: string;
   name: string;
   iniPath: string;
-  startCommand: string;
+  startArgs: string[];
   stopCommands: string[];
 };
 
 export type ServersConfig = {
-  workshopPath: string;
-  stopGraceTimeoutMs: number;
-  forceKillTimeoutMs: number;
+  global: ServerGlobalConfig;
   servers: ServerInstance[];
 };
 

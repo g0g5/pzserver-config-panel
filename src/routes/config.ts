@@ -116,7 +116,7 @@ export function createConfigRouter(configPath?: string): express.Router {
       const targetServer = resolveConfigServer(serversConfig, req);
       const data = await readConfig(targetServer.iniPath);
       const workshopItems = await buildWorkshopItems(
-        serversConfig.workshopPath,
+        serversConfig.global.workshopPath,
         data.items,
       );
 
@@ -145,7 +145,7 @@ export function createConfigRouter(configPath?: string): express.Router {
     try {
       const serversConfig = await loadServersConfig({ cliConfigPath: configPath });
 
-      if (!serversConfig.workshopPath) {
+      if (!serversConfig.global.workshopPath) {
         throw new AppError("BAD_REQUEST", "Workshop path is not configured");
       }
 
@@ -156,7 +156,7 @@ export function createConfigRouter(configPath?: string): express.Router {
         throw new AppError("BAD_REQUEST", "rel parameter is required");
       }
 
-      const rootAbs = resolve(serversConfig.workshopPath);
+      const rootAbs = resolve(serversConfig.global.workshopPath);
       const candidateAbs = rel ? resolve(rootAbs, rel) : resolve(legacyPath);
 
       const relToRoot = relative(rootAbs, candidateAbs).replace(/\\/g, "/");

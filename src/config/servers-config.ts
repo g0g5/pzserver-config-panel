@@ -1,7 +1,7 @@
 import { basename, isAbsolute } from "node:path";
 import { readFile, writeFile } from "node:fs/promises";
 import { AppError } from "../errors/app-error.js";
-import type { ServerInstance, ServersConfig } from "../types/server.js";
+import type { ServerInstance, ServersConfig, ServerGlobalConfig } from "../types/server.js";
 
 type LegacyPathsConfigFile = {
   workshopPath?: unknown;
@@ -11,6 +11,22 @@ type LegacyPathsConfigFile = {
 export type LegacyPathsConfig = {
   workshopPath: string;
   iniFilePath: string;
+};
+
+type LegacyServerInstance = {
+  id?: string;
+  name?: string;
+  iniPath?: string;
+  startCommand?: string;
+  stopCommands?: string[];
+};
+
+type LegacyServersConfig = {
+  workshopPath?: string;
+  startScriptPath?: string;
+  stopGraceTimeoutMs?: number;
+  forceKillTimeoutMs?: number;
+  servers?: LegacyServerInstance[];
 };
 
 type LoadServersConfigOptions = {
@@ -28,7 +44,7 @@ const LEGACY_PATHS_CONFIG_FILE = "./paths-config.json";
 const DEFAULT_STOP_GRACE_TIMEOUT_MS = 45000;
 const DEFAULT_FORCE_KILL_TIMEOUT_MS = 10000;
 const DEFAULT_STOP_COMMANDS = ["save", "quit"];
-const DEFAULT_START_COMMAND = "./start-server.sh";
+const DEFAULT_START_SCRIPT_PATH = "./start-server.sh";
 const DEFAULT_SERVER_ID = "default";
 const DEFAULT_SERVER_NAME = "默认实例";
 
@@ -40,11 +56,24 @@ function isValidIniPath(iniPath: string): boolean {
   return isAbsolute(iniPath) && /\.ini$/i.test(iniPath);
 }
 
+function isValidStartScriptPath(scriptPath: string): boolean {
+  return isAbsolute(scriptPath);
+}
+
 function ensureValidIniPath(iniPath: string, fieldName: string): void {
   if (!isValidIniPath(iniPath)) {
     throw new AppError(
       "BAD_REQUEST",
       `${fieldName} must be an absolute path ending with .ini`,
+    );
+  }
+}
+
+function ensureValidStartScriptPath(scriptPath: string, fieldName: string): void {
+  if (!isValidStartScriptPath(scriptPath)) {
+    throw new AppError(
+      "BAD_REQUEST",
+      `${fieldName} must be an absolute path`,
     );
   }
 }
@@ -96,6 +125,31 @@ function normalizeStopCommands(value: unknown, index: number): string[] {
   return normalized;
 }
 
+function normalizeStartArgs(value: unknown, index: number, iniBaseName: string): string[] {
+  if (value === undefined) {
+    return ["-servername", iniBaseName];
+  }
+
+  if (!Array.isArray(value)) {
+    throw new AppError(
+      "BAD_REQUEST",
+      `servers[${index}].startArgs must be a string array`,
+    );
+  }
+
+  return value
+    .map((item, itemIndex) => {
+      if (typeof item !== "string") {
+        throw new AppError(
+          "BAD_REQUEST",
+          `servers[${index}].startArgs[${itemIndex}] must be a string`,
+        );
+      }
+      return item.trim();
+    })
+    .filter((item) => item.length > 0);
+}
+
 function normalizeServerInstance(
   value: unknown,
   index: number,
@@ -119,21 +173,49 @@ function normalizeServerInstance(
   const rawIniPath = typeof value.iniPath === "string" ? value.iniPath.trim() : "";
   ensureValidIniPath(rawIniPath, `servers[${index}].iniPath`);
 
-  const rawStartCommand =
-    typeof value.startCommand === "string" ? value.startCommand.trim() : "";
-  if (!rawStartCommand) {
-    throw new AppError(
-      "BAD_REQUEST",
-      `servers[${index}].startCommand must be a non-empty string`,
-    );
-  }
+  const iniBaseName = getIniBaseName(rawIniPath);
 
   return {
     id: rawId,
     name: rawName || rawId,
     iniPath: rawIniPath,
-    startCommand: rawStartCommand,
+    startArgs: normalizeStartArgs(value.startArgs, index, iniBaseName),
     stopCommands: normalizeStopCommands(value.stopCommands, index),
+  };
+}
+
+function normalizeGlobalConfig(value: unknown): ServerGlobalConfig {
+  if (!isObject(value)) {
+    return {
+      workshopPath: "",
+      startScriptPath: DEFAULT_START_SCRIPT_PATH,
+      stopGraceTimeoutMs: DEFAULT_STOP_GRACE_TIMEOUT_MS,
+      forceKillTimeoutMs: DEFAULT_FORCE_KILL_TIMEOUT_MS,
+    };
+  }
+
+  const workshopPath = typeof value.workshopPath === "string" ? value.workshopPath : "";
+  const startScriptPath = typeof value.startScriptPath === "string"
+    ? value.startScriptPath
+    : DEFAULT_START_SCRIPT_PATH;
+
+  if (startScriptPath && !isValidStartScriptPath(startScriptPath)) {
+    throw new AppError("BAD_REQUEST", "global.startScriptPath must be an absolute path");
+  }
+
+  return {
+    workshopPath,
+    startScriptPath,
+    stopGraceTimeoutMs: normalizeTimeout(
+      value.stopGraceTimeoutMs,
+      "global.stopGraceTimeoutMs",
+      DEFAULT_STOP_GRACE_TIMEOUT_MS,
+    ),
+    forceKillTimeoutMs: normalizeTimeout(
+      value.forceKillTimeoutMs,
+      "global.forceKillTimeoutMs",
+      DEFAULT_FORCE_KILL_TIMEOUT_MS,
+    ),
   };
 }
 
@@ -142,26 +224,7 @@ function normalizeServersConfig(value: unknown): ServersConfig {
     throw new AppError("BAD_REQUEST", "Servers config must be an object");
   }
 
-  if (
-    value.workshopPath !== undefined &&
-    typeof value.workshopPath !== "string"
-  ) {
-    throw new AppError("BAD_REQUEST", "workshopPath must be a string");
-  }
-
-  const workshopPath =
-    typeof value.workshopPath === "string" ? value.workshopPath : "";
-
-  const stopGraceTimeoutMs = normalizeTimeout(
-    value.stopGraceTimeoutMs,
-    "stopGraceTimeoutMs",
-    DEFAULT_STOP_GRACE_TIMEOUT_MS,
-  );
-  const forceKillTimeoutMs = normalizeTimeout(
-    value.forceKillTimeoutMs,
-    "forceKillTimeoutMs",
-    DEFAULT_FORCE_KILL_TIMEOUT_MS,
-  );
+  const global = normalizeGlobalConfig(value.global);
 
   if (!Array.isArray(value.servers)) {
     throw new AppError("BAD_REQUEST", "servers must be an array");
@@ -173,9 +236,7 @@ function normalizeServersConfig(value: unknown): ServersConfig {
   );
 
   return {
-    workshopPath,
-    stopGraceTimeoutMs,
-    forceKillTimeoutMs,
+    global,
     servers,
   };
 }
@@ -225,7 +286,7 @@ function createServerFromIniPath(
     id,
     name: baseName || DEFAULT_SERVER_NAME,
     iniPath,
-    startCommand: DEFAULT_START_COMMAND,
+    startArgs: ["-servername", baseName],
     stopCommands: [...DEFAULT_STOP_COMMANDS],
   };
 }
@@ -272,6 +333,84 @@ async function writeServersConfigFile(
   );
 }
 
+function parseStartCommandToArgs(startCommand: string): { scriptPath: string; args: string[] } {
+  const parts = startCommand.trim().split(/\s+/);
+  if (parts.length === 0) {
+    return { scriptPath: DEFAULT_START_SCRIPT_PATH, args: [] };
+  }
+
+  const scriptPath = parts[0];
+  const args = parts.slice(1);
+  return { scriptPath, args };
+}
+
+function migrateLegacyServersConfig(legacy: LegacyServersConfig): ServersConfig {
+  const servers: ServerInstance[] = [];
+  const usedIds = new Set<string>();
+
+  if (Array.isArray(legacy.servers)) {
+    for (const legacyServer of legacy.servers) {
+      const rawId = typeof legacyServer.id === "string" ? legacyServer.id.trim() : "";
+      if (!rawId) continue;
+
+      const rawIniPath = typeof legacyServer.iniPath === "string" ? legacyServer.iniPath.trim() : "";
+      if (!isValidIniPath(rawIniPath)) continue;
+
+      const id = createUniqueId(rawId, usedIds);
+      const name = typeof legacyServer.name === "string" ? legacyServer.name.trim() : id;
+      const iniBaseName = getIniBaseName(rawIniPath);
+
+      let startArgs: string[];
+      if (typeof legacyServer.startCommand === "string" && legacyServer.startCommand.trim()) {
+        const { args } = parseStartCommandToArgs(legacyServer.startCommand);
+        startArgs = args.length > 0 ? args : ["-servername", iniBaseName];
+      } else {
+        startArgs = ["-servername", iniBaseName];
+      }
+
+      const stopCommands = Array.isArray(legacyServer.stopCommands)
+        ? legacyServer.stopCommands.filter((cmd): cmd is string => typeof cmd === "string")
+        : [...DEFAULT_STOP_COMMANDS];
+
+      servers.push({
+        id,
+        name: name || id,
+        iniPath: rawIniPath,
+        startArgs,
+        stopCommands,
+      });
+    }
+  }
+
+  let startScriptPath = DEFAULT_START_SCRIPT_PATH;
+  if (typeof legacy.startScriptPath === "string" && legacy.startScriptPath.trim()) {
+    startScriptPath = legacy.startScriptPath.trim();
+  } else if (servers.length > 0 && typeof legacy.servers?.[0]?.startCommand === "string") {
+    const { scriptPath } = parseStartCommandToArgs(legacy.servers[0].startCommand);
+    if (isAbsolute(scriptPath)) {
+      startScriptPath = scriptPath;
+    }
+  }
+
+  return {
+    global: {
+      workshopPath: typeof legacy.workshopPath === "string" ? legacy.workshopPath : "",
+      startScriptPath,
+      stopGraceTimeoutMs: normalizeTimeout(
+        legacy.stopGraceTimeoutMs,
+        "stopGraceTimeoutMs",
+        DEFAULT_STOP_GRACE_TIMEOUT_MS,
+      ),
+      forceKillTimeoutMs: normalizeTimeout(
+        legacy.forceKillTimeoutMs,
+        "forceKillTimeoutMs",
+        DEFAULT_FORCE_KILL_TIMEOUT_MS,
+      ),
+    },
+    servers,
+  };
+}
+
 function createMigratedConfig(
   legacy: LegacyPathsConfig,
   cliConfigPath?: string,
@@ -291,9 +430,12 @@ function createMigratedConfig(
   }
 
   return {
-    workshopPath: legacy.workshopPath,
-    stopGraceTimeoutMs: DEFAULT_STOP_GRACE_TIMEOUT_MS,
-    forceKillTimeoutMs: DEFAULT_FORCE_KILL_TIMEOUT_MS,
+    global: {
+      workshopPath: legacy.workshopPath,
+      startScriptPath: DEFAULT_START_SCRIPT_PATH,
+      stopGraceTimeoutMs: DEFAULT_STOP_GRACE_TIMEOUT_MS,
+      forceKillTimeoutMs: DEFAULT_FORCE_KILL_TIMEOUT_MS,
+    },
     servers,
   };
 }
@@ -320,7 +462,7 @@ export function toLegacyPathsConfig(
   const selectedServer = getServerInstance(config, serverId);
 
   return {
-    workshopPath: config.workshopPath,
+    workshopPath: config.global.workshopPath,
     iniFilePath: selectedServer?.iniPath ?? "",
   };
 }
@@ -335,6 +477,7 @@ export function applyLegacyPathsConfig(
   const nextServers = config.servers.map((server) => ({
     ...server,
     stopCommands: [...server.stopCommands],
+    startArgs: [...server.startArgs],
   }));
 
   if (iniFilePath) {
@@ -351,9 +494,10 @@ export function applyLegacyPathsConfig(
   }
 
   return {
-    workshopPath,
-    stopGraceTimeoutMs: config.stopGraceTimeoutMs,
-    forceKillTimeoutMs: config.forceKillTimeoutMs,
+    global: {
+      ...config.global,
+      workshopPath,
+    },
     servers: nextServers,
   };
 }
@@ -367,7 +511,16 @@ export async function loadServersConfig(
 
   const rawServersConfig = await readJsonIfExists(serversConfigPath);
   if (rawServersConfig !== null) {
-    return normalizeServersConfig(rawServersConfig);
+    const hasNewStructure = isObject(rawServersConfig) && "global" in rawServersConfig;
+    
+    if (hasNewStructure) {
+      return normalizeServersConfig(rawServersConfig);
+    }
+
+    const legacyConfig = rawServersConfig as LegacyServersConfig;
+    const migratedConfig = migrateLegacyServersConfig(legacyConfig);
+    await writeServersConfigFile(migratedConfig, serversConfigPath);
+    return migratedConfig;
   }
 
   const rawLegacyConfig = await readJsonIfExists(legacyPathsConfigPath);
@@ -389,4 +542,14 @@ export async function saveServersConfig(
   const normalized = normalizeServersConfig(rawConfig);
   await writeServersConfigFile(normalized, serversConfigPath);
   return normalized;
+}
+
+export function generateServerId(name: string, existingIds: Set<string>): string {
+  const baseId = slugify(name);
+  return createUniqueId(baseId || DEFAULT_SERVER_ID, new Set(existingIds));
+}
+
+export function buildStartCommand(globalConfig: ServerGlobalConfig, server: ServerInstance): string {
+  const args = server.startArgs.join(" ");
+  return `${globalConfig.startScriptPath} ${args}`.trim();
 }
